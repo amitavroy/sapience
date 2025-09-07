@@ -5,16 +5,21 @@ services:
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.simple
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
-      - backend-uv-cache:/app/.uv
+    env_file:
+      - ./backend/.env
     environment:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
-    command: uv run python main.py
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin123}
+      - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME:-sapience-dev}
+    command: python main.py
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -24,6 +29,8 @@ services:
       start_period: 40s
     networks:
       - sapience-network
+    depends_on:
+      - minio
     stdin_open: true
     tty: true
 
@@ -38,9 +45,12 @@ services:
       - ./frontend:/app
       - frontend-node-modules:/app/node_modules
       - frontend-next-cache:/app/.next
+    env_file:
+      - ./frontend/.env.local
     environment:
       - NODE_ENV=development
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      - NEXT_PUBLIC_MINIO_URL=${NEXT_PUBLIC_MINIO_URL:-http://localhost:9000}
       - WATCHPACK_POLLING=true
     command: npm run dev
     restart: unless-stopped
@@ -48,15 +58,39 @@ services:
       - sapience-network
     depends_on:
       - backend
+      - minio
     stdin_open: true
     tty: true
+
+  # MinIO - S3 Compatible Object Storage for Development
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"      # API port
+      - "9001:9001"      # Console port
+    volumes:
+      - minio-data:/data
+    env_file:
+      - ./backend/.env
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin123}
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    networks:
+      - sapience-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
 
 networks:
   sapience-network:
     driver: bridge
 
 volumes:
-  backend-uv-cache:
   frontend-node-modules:
   frontend-next-cache:
+  minio-data:
 

@@ -14,6 +14,8 @@ help:
 	@echo "  make clean   - Clean up containers and volumes"
 	@echo "  make shell-backend  - Open shell in backend container"
 	@echo "  make shell-frontend - Open shell in frontend container"
+	@echo "  make setup-minio - Setup MinIO bucket and policies"
+	@echo "  make minio-console - Open MinIO web console"
 
 # Development environment
 dev:
@@ -57,4 +59,16 @@ restart-backend:
 
 restart-frontend:
 	docker compose restart frontend
+
+# MinIO management
+setup-minio:
+	@echo "🚀 Setting up MinIO..."
+	@./scripts/setup-minio.sh
+
+minio-console:
+	@echo "🌐 Opening MinIO Console..."
+	@echo "URL: http://localhost:9001"
+	@echo "Username: minioadmin"
+	@echo "Password: minioadmin123"
+	@xdg-open http://localhost:9001 || open http://localhost:9001 || echo "Please open http://localhost:9001 in your browser"
 
