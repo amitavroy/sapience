@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.simple
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      - PYTHONPATH=/app
+    command: python main.py
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - sapience-network
+
+  # Next.js Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules  # Exclude node_modules from volume mount
+      - /app/.next  # Exclude Next.js build cache from volume mount
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    command: npm run dev
+    restart: unless-stopped
+    networks:
+      - sapience-network
+    depends_on:
+      - backend
+
+networks:
+  sapience-network:
+    driver: bridge
+
+volumes:
+  backend-uv-cache:
+  frontend-node-modules:
+  frontend-next-cache:
