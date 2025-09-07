@@ -5,14 +5,12 @@ services:
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile.simple
+      dockerfile: Dockerfile.prod
     ports:
       - "8000:8000"
-    volumes:
-      - ./backend:/app
     environment:
       - PYTHONPATH=/app
-    command: python main.py
+    command: uv run python main.py
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]

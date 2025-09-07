@@ -1,4 +1,4 @@
-# Use Python 3.13 slim image
+# Production Dockerfile - only installs production dependencies
 FROM python:3.13-slim
 
 # Set working directory
@@ -18,12 +18,11 @@ COPY uv.lock ./
 COPY main.py ./
 COPY app/ ./app/
 
-# Install dependencies using uv (including dev dependencies for testing)
-RUN uv sync --frozen --group dev
+# Install only production dependencies
+RUN uv sync --frozen --no-dev
 
 # Expose port
 EXPOSE 8000
 
 # Start the application
 CMD ["uv", "run", "python", "main.py"]
-

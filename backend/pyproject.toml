@@ -5,6 +5,7 @@ description = "FastAPI backend for Sapience application"
 authors = [
     {name = "Amitav Roy", email = "amitav@example.com"}
 ]
+requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.104.1",
     "uvicorn[standard]>=0.24.0",
@@ -12,7 +13,34 @@ dependencies = [
     "python-multipart>=0.0.6",
     "minio>=7.2.0",
 ]
-requires-python = ">=3.11"
+
+[dependency-groups]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-mock>=3.11.0",
+    "pytest-cov>=4.1.0",
+    "httpx>=0.24.0",
+    "factory-boy>=3.2.0",
+    "freezegun>=1.2.0",
+    "responses>=0.23.0",
+]
+test = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-mock>=3.11.0",
+    "pytest-cov>=4.1.0",
+    "httpx>=0.24.0",
+    "factory-boy>=3.2.0",
+    "freezegun>=1.2.0",
+    "responses>=0.23.0",
+]
+lint = [
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.5.0",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -25,3 +53,24 @@ packages = ["app"]
 host = "0.0.0.0"
 port = 8000
 reload = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "--disable-warnings",
+]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "slow: Slow running tests",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]

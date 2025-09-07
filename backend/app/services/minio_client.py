@@ -44,6 +44,45 @@ class MinIOClient:
         except S3Error as e:
             print(f"❌ Error creating bucket: {e}")
 
+    def upload_file_from_memory(
+        self,
+        file_data: bytes,
+        object_name: str,
+        content_type: str = "application/octet-stream",
+    ) -> str:
+        """
+        Upload file data from memory to MinIO.
+
+        Args:
+            file_data: File content as bytes
+            object_name: Name for the object in MinIO
+            content_type: MIME type of the file
+
+        Returns:
+            URL of the uploaded file
+        """
+        try:
+            from io import BytesIO
+
+            # Create a BytesIO object from the file data
+            file_stream = BytesIO(file_data)
+
+            # Upload to MinIO
+            self.client.put_object(
+                bucket_name=self.bucket_name,
+                object_name=object_name,
+                data=file_stream,
+                length=len(file_data),
+                content_type=content_type,
+            )
+
+            url = f"{self.endpoint}/{self.bucket_name}/{object_name}"
+            print(f"✅ Uploaded from memory: {url}")
+            return url
+        except S3Error as e:
+            print(f"❌ Upload from memory error: {e}")
+            raise
+
     def upload_file(self, file_path: str, object_name: Optional[str] = None) -> str:
         """
         Upload a file to MinIO.

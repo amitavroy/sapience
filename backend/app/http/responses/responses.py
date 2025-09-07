@@ -7,6 +7,7 @@ Models are organized by functionality and can be grouped together as needed.
 
 from pydantic import BaseModel
 from datetime import datetime
+from typing import Optional
 
 
 class HealthResponse(BaseModel):
@@ -26,3 +27,24 @@ class HealthResponse(BaseModel):
     version: str
     python_version: str
     platform: str
+
+
+class FileUploadResponse(BaseModel):
+    """
+    File upload response model containing upload details.
+
+    Attributes:
+        success: Whether the upload was successful
+        url: Public URL of the uploaded file
+        filename: Original filename
+        size: File size in bytes
+        content_type: MIME type of the file
+        upload_timestamp: When the file was uploaded
+    """
+
+    success: bool
+    url: str
+    filename: str
+    size: int
+    content_type: str
+    upload_timestamp: datetime
