@@ -1,0 +1,15 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# Running python command
+For any python command, always use the docker container to execute python.
+Always use python and not python3 inside the container.
+
+# Security
+Never add any .env value, username, password in files which will be commited to git.
+
+# Nextjs rules
+1. In nextjs, any API call made should route through a server side call.

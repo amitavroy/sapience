@@ -4,13 +4,33 @@ import platform
 import sys
 import logging
 import time
+from contextlib import asynccontextmanager
 from app.http.responses.responses import HealthResponse, FileUploadResponse
 from app.services.minio_client import MinIOClient
 from app.services.file_validator import FileValidator
+from config import db_config
+from app.api.users import router as users_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan events."""
+    # Startup
+    logger.info("Starting up database...")
+    await db_config.create_tables()
+    logger.info("Database tables created successfully")
+
+    yield
+
+    # Shutdown
+    logger.info("Shutting down database...")
+    await db_config.close()
+    logger.info("Database connection closed")
+
 
 app = FastAPI(
     title="Sapience API",
@@ -18,7 +38,11 @@ app = FastAPI(
     version="0.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
+
+# Include routers
+app.include_router(users_router)
 
 
 @app.get("/")

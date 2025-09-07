@@ -43,6 +43,7 @@ up:
 # Stop services
 down:
 	docker compose down
+	docker compose -f docker-compose.dev.yml down
 
 # Show logs
 logs:
@@ -51,6 +52,7 @@ logs:
 # Clean up
 clean:
 	docker compose down -v
+	docker compose -f docker-compose.dev.yml down -v
 	docker system prune -f
 
 # Shell access

@@ -228,6 +228,110 @@ async def upload_file(file: UploadFile = File(...)):
     return {"url": file_url, "filename": file.filename}
 ```
 
+## 🗄️ **SQLModel Database Setup**
+
+This application uses SQLModel with AsyncPG for database operations, providing a clean separation of database configuration and session management.
+
+### **Database Structure**
+```
+backend/
+├── config/
+│   ├── __init__.py          # Package exports
+│   ├── database.py          # Database configuration and engine setup
+│   └── session.py           # Session management and dependency injection
+├── app/
+│   ├── models/
+│   │   ├── __init__.py      # Model exports
+│   │   └── user.py          # Example SQLModel definitions
+│   └── api/
+│       ├── __init__.py      # API package
+│       └── users.py         # Example API endpoints
+└── main.py                  # FastAPI app with database initialization
+```
+
+### **Database Configuration**
+The `DatabaseConfig` class handles:
+- Database URL construction from environment variables
+- Async engine creation with proper settings
+- Session factory setup
+- Table creation and cleanup
+
+### **Session Management**
+Provides two ways to get database sessions:
+
+#### Dependency Injection (Recommended for FastAPI)
+```python
+from config import get_session
+
+@app.get("/users")
+async def get_users(session: AsyncSession = Depends(get_session)):
+    # Use session for database operations
+    result = await session.execute(sqlmodel_select(User))
+    users = result.scalars().all()
+    return users
+```
+
+#### Context Manager
+```python
+from config import get_session_context
+
+async with get_session_context() as session:
+    # Use session for database operations
+    result = await session.execute(sqlmodel_select(User))
+    users = result.scalars().all()
+    return users
+```
+
+### **Model Definition**
+Example SQLModel with proper schemas:
+
+```python
+from sqlmodel import SQLModel, Field
+from datetime import datetime
+
+class User(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    email: str = Field(unique=True, index=True)
+    username: str = Field(unique=True, index=True)
+    full_name: Optional[str] = None
+    is_active: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None
+```
+
+### **API Endpoints**
+Example CRUD operations using the session dependency:
+
+```python
+@router.post("/", response_model=UserRead)
+async def create_user(
+    user_data: UserCreate,
+    session: AsyncSession = Depends(get_session)
+):
+    user = User(**user_data.dict())
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+    return user
+```
+
+### **Database Environment Variables**
+Make sure your `.env` file contains:
+
+```bash
+# Database Configuration
+POSTGRES_DB=sapience_db
+POSTGRES_USER=sapience_user
+POSTGRES_PASSWORD=sapience_password
+POSTGRES_HOST=postgres
+POSTGRES_PORT=5432
+```
+
+The application will automatically:
+- Create database tables on startup
+- Close database connections on shutdown
+- Provide database sessions to your endpoints
+
 ## 🌐 **API Endpoints**
 
 ### **Backend API**
@@ -235,6 +339,7 @@ async def upload_file(file: UploadFile = File(...)):
 - **Health Check**: `GET /health` - Detailed health status
 - **API Documentation**: `GET /docs` - Interactive Swagger UI
 - **ReDoc**: `GET /redoc` - Alternative API documentation
+- **Users**: `GET /users`, `POST /users`, `GET /users/{id}`, `PUT /users/{id}`, `DELETE /users/{id}`
 
 ### **Health Check Response**
 ```json
