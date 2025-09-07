@@ -33,9 +33,38 @@ make setup-minio
 
 ### **4. Access Your Applications**
 - **Frontend**: http://localhost:3000
+- **File Upload Page**: http://localhost:3000/upload
 - **Backend API**: http://localhost:8000
 - **API Documentation**: http://localhost:8000/docs
 - **MinIO Console**: http://localhost:9001
+
+## 📤 **File Upload Feature**
+
+The application includes a comprehensive file upload system:
+
+### **Frontend Upload Page**
+- **URL**: http://localhost:3000/upload
+- **Features**:
+  - Drag & drop file upload
+  - File type validation (PDF, Word, Excel, Images, HTML, CSV, JSON, XML)
+  - File size limit (50MB)
+  - Real-time upload progress
+  - Upload success/failure feedback
+  - Direct file URL display
+
+### **Security Architecture**
+- **Server-Side Communication**: All file uploads go through Next.js API routes
+- **No Direct Backend Access**: Frontend never directly calls the Python backend
+- **Secure Payload**: File data is processed server-side, keeping backend API hidden
+
+### **Upload Flow**
+1. User selects/drops file on frontend
+2. Frontend sends file to `/api/upload` (Next.js API route)
+3. Next.js API route forwards file to Python backend
+4. Python backend validates and uploads to MinIO
+5. Backend returns upload details to Next.js
+6. Next.js returns success response to frontend
+7. Frontend displays upload results and file URL
 
 ## 📁 **Project Structure**
 

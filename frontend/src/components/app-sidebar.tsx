@@ -12,6 +12,7 @@ import {
   PieChart,
   Settings2,
   Terminal,
+  Upload,
 } from "lucide-react";
 
 import { NavMain } from "@/components/nav-main";
@@ -52,24 +53,15 @@ const data = {
   ],
   navMain: [
     {
-      title: "Playground",
-      url: "#",
+      title: "Dashboard",
+      url: "/",
       icon: Terminal,
       isActive: true,
-      items: [
-        {
-          title: "History",
-          url: "#",
-        },
-        {
-          title: "Starred",
-          url: "#",
-        },
-        {
-          title: "Settings",
-          url: "#",
-        },
-      ],
+    },
+    {
+      title: "File Upload",
+      url: "/upload",
+      icon: Upload,
     },
     {
       title: "Models",
