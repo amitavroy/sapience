@@ -1,8 +1,6 @@
 <?php
 
-use App\Models\Concerns\HasUniqueId;
 use App\Models\Organisation;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
 test('trait auto-generates uuid on model creation', function () {

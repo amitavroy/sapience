@@ -18,7 +18,7 @@ test('organisation uuid is unique', function () {
 
     Organisation::factory()->create(['uuid' => $uuid]);
 
-    expect(fn() => Organisation::factory()->create(['uuid' => $uuid]))
+    expect(fn () => Organisation::factory()->create(['uuid' => $uuid]))
         ->toThrow(\Illuminate\Database\QueryException::class);
 });
 
@@ -72,7 +72,7 @@ test('user cannot be attached to same organisation twice', function () {
 
     $user->organisations()->attach($organisation->id, ['role' => 'admin']);
 
-    expect(fn() => $user->organisations()->attach($organisation->id, ['role' => 'member']))
+    expect(fn () => $user->organisations()->attach($organisation->id, ['role' => 'member']))
         ->toThrow(\Illuminate\Database\QueryException::class);
 });
 
