@@ -5,12 +5,12 @@ namespace App\Models;
 use App\Models\Concerns\HasUniqueId;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Organisation extends Model
+class File extends Model
 {
-    /** @use HasFactory<\Database\Factories\OrganisationFactory> */
+    /** @use HasFactory<\Database\Factories\FileFactory> */
     use HasFactory, HasUniqueId;
 
     /**
@@ -19,7 +19,11 @@ class Organisation extends Model
      * @var list<string>
      */
     protected $fillable = [
-        'name',
+        'original_filename',
+        'filename',
+        'file_size',
+        'mime_type',
+        'user_id',
     ];
 
     /**
@@ -31,24 +35,24 @@ class Organisation extends Model
     {
         return [
             'uuid' => 'string',
+            'file_size' => 'integer',
         ];
     }
 
     /**
-     * Get the users that belong to the organisation.
+     * Get the user who uploaded the file.
      */
-    public function users(): BelongsToMany
+    public function user(): BelongsTo
     {
-        return $this->belongsToMany(User::class)
-            ->withPivot('role')
-            ->withTimestamps();
+        return $this->belongsTo(User::class);
     }
 
     /**
-     * Get the datasets that belong to the organisation.
+     * Get the datasets that the file belongs to.
      */
-    public function datasets(): HasMany
+    public function datasets(): BelongsToMany
     {
-        return $this->hasMany(Dataset::class);
+        return $this->belongsToMany(Dataset::class)
+            ->withTimestamps();
     }
 }

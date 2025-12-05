@@ -5,6 +5,7 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
@@ -59,5 +60,21 @@ class User extends Authenticatable
         return $this->belongsToMany(Organisation::class)
             ->withPivot('role')
             ->withTimestamps();
+    }
+
+    /**
+     * Get the datasets owned by the user.
+     */
+    public function datasets(): HasMany
+    {
+        return $this->hasMany(Dataset::class, 'owner_id');
+    }
+
+    /**
+     * Get the files uploaded by the user.
+     */
+    public function files(): HasMany
+    {
+        return $this->hasMany(File::class);
     }
 }
