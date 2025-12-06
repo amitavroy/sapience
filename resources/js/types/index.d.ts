@@ -22,10 +22,18 @@ export interface NavItem {
     isActive?: boolean;
 }
 
+export interface Organisation {
+    id: number;
+    uuid: string;
+    name: string;
+}
+
 export interface SharedData {
     name: string;
     quote: { message: string; author: string };
     auth: Auth;
+    organisations: Organisation[] | null;
+    currentOrganisation: Organisation | null;
     sidebarOpen: boolean;
     [key: string]: unknown;
 }

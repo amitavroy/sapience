@@ -212,3 +212,50 @@ test('dashboard access updates last_organisation_id when switching organisations
     $this->actingAs($user)->get(route('organisations.dashboard', $organisation2));
     expect($user->fresh()->last_organisation_id)->toBe($organisation2->id);
 });
+
+test('organisations are shared in Inertia props', function () {
+    $user = User::factory()->create();
+    $organisation1 = Organisation::factory()->create();
+    $organisation2 = Organisation::factory()->create();
+    $user->organisations()->attach($organisation1->id, ['role' => 'member']);
+    $user->organisations()->attach($organisation2->id, ['role' => 'member']);
+
+    $response = $this->actingAs($user)->get(route('organisations.dashboard', $organisation1));
+
+    $response->assertSuccessful();
+    $response->assertInertia(fn ($page) => $page
+        ->has('organisations', 2)
+        ->where('currentOrganisation.id', $organisation1->id)
+    );
+});
+
+test('current organisation is null when user has no last_organisation_id and not on organisation route', function () {
+    $user = User::factory()->create();
+    $organisation = Organisation::factory()->create();
+    $user->organisations()->attach($organisation->id, ['role' => 'member']);
+
+    $response = $this->actingAs($user)->get(route('dashboard'));
+
+    $response->assertSuccessful();
+    $response->assertInertia(fn ($page) => $page
+        ->has('organisations', 1)
+        ->where('currentOrganisation', null)
+    );
+});
+
+test('current organisation is set from last_organisation_id when not on organisation route', function () {
+    $user = User::factory()->create();
+    $organisation1 = Organisation::factory()->create();
+    $organisation2 = Organisation::factory()->create();
+    $user->organisations()->attach($organisation1->id, ['role' => 'member']);
+    $user->organisations()->attach($organisation2->id, ['role' => 'member']);
+    $user->update(['last_organisation_id' => $organisation1->id]);
+
+    $response = $this->actingAs($user)->get(route('dashboard'));
+
+    $response->assertSuccessful();
+    $response->assertInertia(fn ($page) => $page
+        ->has('organisations', 2)
+        ->where('currentOrganisation.id', $organisation1->id)
+    );
+});

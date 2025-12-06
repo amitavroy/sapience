@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import AuthLayout from '@/layouts/auth-layout';
-import { join, create } from '@/routes/organisations';
+import { create, join } from '@/routes/organisations';
 import { Head, Link } from '@inertiajs/react';
 
 export default function Setup() {
@@ -11,7 +11,7 @@ export default function Setup() {
         >
             <Head title="Set up Organisation" />
             <div className="flex min-h-[60vh] items-center justify-center">
-                <div className="flex flex-col gap-4 w-full max-w-md">
+                <div className="flex w-full max-w-md flex-col gap-4">
                     <Link href={join()}>
                         <Button
                             type="button"
@@ -23,11 +23,7 @@ export default function Setup() {
                         </Button>
                     </Link>
                     <Link href={create()}>
-                        <Button
-                            type="button"
-                            className="w-full"
-                            size="lg"
-                        >
+                        <Button type="button" className="w-full" size="lg">
                             Create new organisation
                         </Button>
                     </Link>
@@ -36,4 +32,3 @@ export default function Setup() {
         </AuthLayout>
     );
 }
-

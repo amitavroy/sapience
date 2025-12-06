@@ -38,13 +38,31 @@ class HandleInertiaRequests extends Middleware
     {
         [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
 
+        $user = $request->user();
+        $organisations = null;
+        $currentOrganisation = null;
+
+        if ($user) {
+            $organisations = $user->organisations()->get();
+
+            // Determine current organisation from route parameter or last_organisation_id
+            $routeOrganisation = $request->route('organisation');
+            if ($routeOrganisation) {
+                $currentOrganisation = $routeOrganisation;
+            } elseif ($user->last_organisation_id) {
+                $currentOrganisation = $organisations->firstWhere('id', $user->last_organisation_id);
+            }
+        }
+
         return [
             ...parent::share($request),
             'name' => config('app.name'),
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
-                'user' => $request->user(),
+                'user' => $user,
             ],
+            'organisations' => $organisations,
+            'currentOrganisation' => $currentOrganisation,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
     }

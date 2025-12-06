@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import AuthLayout from '@/layouts/auth-layout';
 import { store } from '@/routes/organisations';
-import { Head, Form } from '@inertiajs/react';
+import { Form, Head } from '@inertiajs/react';
 
 export default function Create() {
     return (
@@ -14,10 +14,7 @@ export default function Create() {
             description="Enter a name for your new organisation. You will be the admin of this organisation."
         >
             <Head title="Create Organisation" />
-            <Form
-                {...store.form()}
-                className="flex flex-col gap-6"
-            >
+            <Form {...store.form()} className="flex flex-col gap-6">
                 {({ processing, errors }) => (
                     <>
                         <div className="grid gap-6">
@@ -51,4 +48,3 @@ export default function Create() {
         </AuthLayout>
     );
 }
-
