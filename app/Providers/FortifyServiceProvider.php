@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
+use Laravel\Fortify\Contracts\LoginResponse;
 use Laravel\Fortify\Contracts\RegisterResponse;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Fortify;
@@ -21,6 +22,45 @@ class FortifyServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->instance(LoginResponse::class, new class implements LoginResponse
+        {
+            public function toResponse($request)
+            {
+                $user = $request->user();
+
+                if (! $user) {
+                    return redirect()->route('dashboard');
+                }
+
+                // If user has no organisations, redirect to setup
+                if ($user->organisations()->count() === 0) {
+                    return redirect()->route('organisations.setup');
+                }
+
+                // If user has last_organisation_id set and it's valid, redirect to that organisation
+                if ($user->last_organisation_id) {
+                    $lastOrganisation = $user->organisations()
+                        ->where('organisations.id', $user->last_organisation_id)
+                        ->first();
+
+                    if ($lastOrganisation) {
+                        return redirect()->route('organisations.dashboard', $lastOrganisation);
+                    }
+                }
+
+                // If user has only one organisation, set it as last and redirect
+                if ($user->organisations()->count() === 1) {
+                    $organisation = $user->organisations()->first();
+                    $user->update(['last_organisation_id' => $organisation->id]);
+
+                    return redirect()->route('organisations.dashboard', $organisation);
+                }
+
+                // If user has multiple organisations and no last_organisation_id, show selection
+                return redirect()->route('organisations.select');
+            }
+        });
+
         $this->app->instance(RegisterResponse::class, new class implements RegisterResponse
         {
             public function toResponse($request)

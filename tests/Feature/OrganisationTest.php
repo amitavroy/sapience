@@ -110,3 +110,105 @@ test('organisation uuid is not overwritten if already set', function () {
 
     expect($organisation->uuid)->toBe($customUuid);
 });
+
+test('select page can be rendered for users with multiple organisations', function () {
+    $user = User::factory()->create();
+    $organisation1 = Organisation::factory()->create();
+    $organisation2 = Organisation::factory()->create();
+    $user->organisations()->attach($organisation1->id, ['role' => 'member']);
+    $user->organisations()->attach($organisation2->id, ['role' => 'member']);
+
+    $response = $this->actingAs($user)->get(route('organisations.select'));
+
+    $response->assertSuccessful();
+});
+
+test('select page redirects to setup if user has no organisations', function () {
+    $user = User::factory()->create();
+
+    $response = $this->actingAs($user)->get(route('organisations.select'));
+
+    $response->assertRedirect(route('organisations.setup'));
+});
+
+test('select page redirects to dashboard if user has only one organisation', function () {
+    $user = User::factory()->create();
+    $organisation = Organisation::factory()->create();
+    $user->organisations()->attach($organisation->id, ['role' => 'member']);
+
+    $response = $this->actingAs($user)->get(route('organisations.select'));
+
+    $response->assertRedirect(route('organisations.dashboard', $organisation));
+    expect($user->fresh()->last_organisation_id)->toBe($organisation->id);
+});
+
+test('user can select an organisation', function () {
+    $user = User::factory()->create();
+    $organisation1 = Organisation::factory()->create();
+    $organisation2 = Organisation::factory()->create();
+    $user->organisations()->attach($organisation1->id, ['role' => 'member']);
+    $user->organisations()->attach($organisation2->id, ['role' => 'member']);
+
+    $response = $this->actingAs($user)->post(route('organisations.select.store'), [
+        'organisation_id' => $organisation1->id,
+    ]);
+
+    $response->assertRedirect(route('organisations.dashboard', $organisation1));
+    expect($user->fresh()->last_organisation_id)->toBe($organisation1->id);
+});
+
+test('user cannot select an organisation they do not belong to', function () {
+    $user = User::factory()->create();
+    $organisation1 = Organisation::factory()->create();
+    $organisation2 = Organisation::factory()->create();
+    $user->organisations()->attach($organisation1->id, ['role' => 'member']);
+
+    $response = $this->actingAs($user)->post(route('organisations.select.store'), [
+        'organisation_id' => $organisation2->id,
+    ]);
+
+    $response->assertSessionHasErrors('organisation_id');
+});
+
+test('organisation_id is required when selecting', function () {
+    $user = User::factory()->create();
+    $organisation = Organisation::factory()->create();
+    $user->organisations()->attach($organisation->id, ['role' => 'member']);
+
+    $response = $this->actingAs($user)->post(route('organisations.select.store'), []);
+
+    $response->assertSessionHasErrors('organisation_id');
+});
+
+test('dashboard access updates last_organisation_id', function () {
+    $user = User::factory()->create();
+    $organisation1 = Organisation::factory()->create();
+    $organisation2 = Organisation::factory()->create();
+    $user->organisations()->attach($organisation1->id, ['role' => 'member']);
+    $user->organisations()->attach($organisation2->id, ['role' => 'member']);
+
+    expect($user->last_organisation_id)->toBeNull();
+
+    $response = $this->actingAs($user)->get(route('organisations.dashboard', $organisation1));
+
+    $response->assertSuccessful();
+    expect($user->fresh()->last_organisation_id)->toBe($organisation1->id);
+});
+
+test('dashboard access updates last_organisation_id when switching organisations', function () {
+    $user = User::factory()->create([
+        'last_organisation_id' => null,
+    ]);
+    $organisation1 = Organisation::factory()->create();
+    $organisation2 = Organisation::factory()->create();
+    $user->organisations()->attach($organisation1->id, ['role' => 'member']);
+    $user->organisations()->attach($organisation2->id, ['role' => 'member']);
+
+    // Access first organisation
+    $this->actingAs($user)->get(route('organisations.dashboard', $organisation1));
+    expect($user->fresh()->last_organisation_id)->toBe($organisation1->id);
+
+    // Access second organisation
+    $this->actingAs($user)->get(route('organisations.dashboard', $organisation2));
+    expect($user->fresh()->last_organisation_id)->toBe($organisation2->id);
+});

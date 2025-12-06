@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Organisation;
 use App\Models\User;
 use Illuminate\Support\Facades\RateLimiter;
 use Laravel\Fortify\Features;
@@ -19,7 +20,66 @@ test('users can authenticate using the login screen', function () {
     ]);
 
     $this->assertAuthenticated();
-    $response->assertRedirect(route('dashboard', absolute: false));
+    $response->assertRedirect(route('organisations.setup', absolute: false));
+});
+
+test('users with no organisations are redirected to setup after login', function () {
+    $user = User::factory()->withoutTwoFactor()->create();
+
+    $response = $this->post(route('login.store'), [
+        'email' => $user->email,
+        'password' => 'password',
+    ]);
+
+    $this->assertAuthenticated();
+    $response->assertRedirect(route('organisations.setup', absolute: false));
+});
+
+test('users with last_organisation_id are redirected to that organisation dashboard after login', function () {
+    $organisation = Organisation::factory()->create();
+    $user = User::factory()->withoutTwoFactor()->create([
+        'last_organisation_id' => $organisation->id,
+    ]);
+    $user->organisations()->attach($organisation->id, ['role' => 'member']);
+
+    $response = $this->post(route('login.store'), [
+        'email' => $user->email,
+        'password' => 'password',
+    ]);
+
+    $this->assertAuthenticated();
+    $response->assertRedirect(route('organisations.dashboard', $organisation, absolute: false));
+});
+
+test('users with single organisation are redirected to dashboard and last_organisation_id is set after login', function () {
+    $organisation = Organisation::factory()->create();
+    $user = User::factory()->withoutTwoFactor()->create();
+    $user->organisations()->attach($organisation->id, ['role' => 'member']);
+
+    $response = $this->post(route('login.store'), [
+        'email' => $user->email,
+        'password' => 'password',
+    ]);
+
+    $this->assertAuthenticated();
+    $response->assertRedirect(route('organisations.dashboard', $organisation, absolute: false));
+    expect($user->fresh()->last_organisation_id)->toBe($organisation->id);
+});
+
+test('users with multiple organisations and no last_organisation_id are redirected to select after login', function () {
+    $organisation1 = Organisation::factory()->create();
+    $organisation2 = Organisation::factory()->create();
+    $user = User::factory()->withoutTwoFactor()->create();
+    $user->organisations()->attach($organisation1->id, ['role' => 'member']);
+    $user->organisations()->attach($organisation2->id, ['role' => 'member']);
+
+    $response = $this->post(route('login.store'), [
+        'email' => $user->email,
+        'password' => 'password',
+    ]);
+
+    $this->assertAuthenticated();
+    $response->assertRedirect(route('organisations.select', absolute: false));
 });
 
 test('users with two factor enabled are redirected to two factor challenge', function () {

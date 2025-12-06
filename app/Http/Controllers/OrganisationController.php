@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\CreateOrganisationRequest;
 use App\Http\Requests\JoinOrganisationRequest;
+use App\Http\Requests\SelectOrganisationRequest;
 use App\Models\Organisation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,6 +19,47 @@ class OrganisationController extends Controller
     public function setup(): Response
     {
         return Inertia::render('organisations/setup');
+    }
+
+    /**
+     * Show the organisation selection screen.
+     */
+    public function showSelect(Request $request): Response|RedirectResponse
+    {
+        $user = $request->user();
+        $organisations = $user->organisations()->get();
+
+        // If user has no organisations, redirect to setup
+        if ($organisations->isEmpty()) {
+            return redirect()->route('organisations.setup');
+        }
+
+        // If user has only one organisation, redirect to dashboard
+        if ($organisations->count() === 1) {
+            $organisation = $organisations->first();
+            $user->update(['last_organisation_id' => $organisation->id]);
+
+            return redirect()->route('organisations.dashboard', $organisation);
+        }
+
+        return Inertia::render('organisations/select', [
+            'organisations' => $organisations,
+        ]);
+    }
+
+    /**
+     * Handle organisation selection.
+     */
+    public function select(SelectOrganisationRequest $request): RedirectResponse
+    {
+        $user = $request->user();
+        $organisationId = $request->validated()['organisation_id'];
+        $organisation = Organisation::findOrFail($organisationId);
+
+        // Ensure user belongs to this organisation (validation already checks this)
+        $user->update(['last_organisation_id' => $organisation->id]);
+
+        return redirect()->route('organisations.dashboard', $organisation);
     }
 
     /**
@@ -77,9 +119,16 @@ class OrganisationController extends Controller
      */
     public function dashboard(Request $request, Organisation $organisation): Response
     {
+        $user = $request->user();
+
         // Ensure user belongs to this organisation
-        if (! $request->user()->organisations()->where('organisations.id', $organisation->id)->exists()) {
+        if (! $user->organisations()->where('organisations.id', $organisation->id)->exists()) {
             abort(403);
+        }
+
+        // Update last_organisation_id when accessing dashboard
+        if ($user->last_organisation_id !== $organisation->id) {
+            $user->update(['last_organisation_id' => $organisation->id]);
         }
 
         return Inertia::render('organisations/dashboard', [

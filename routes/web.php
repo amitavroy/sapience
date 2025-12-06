@@ -18,6 +18,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::prefix('organisations')->name('organisations.')->group(function () {
         Route::get('setup', [\App\Http\Controllers\OrganisationController::class, 'setup'])->name('setup');
+        Route::get('select', [\App\Http\Controllers\OrganisationController::class, 'showSelect'])->name('select');
+        Route::post('select', [\App\Http\Controllers\OrganisationController::class, 'select'])->name('select.store');
         Route::get('join', [\App\Http\Controllers\OrganisationController::class, 'showJoinForm'])->name('join');
         Route::post('join', [\App\Http\Controllers\OrganisationController::class, 'join'])->name('join.store');
         Route::get('create', [\App\Http\Controllers\OrganisationController::class, 'showCreateForm'])->name('create');
