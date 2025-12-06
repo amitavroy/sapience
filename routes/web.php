@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureUserHasOrganisation;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
@@ -13,7 +14,16 @@ Route::get('/', function () {
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', function () {
         return Inertia::render('dashboard');
-    })->name('dashboard');
+    })->middleware(EnsureUserHasOrganisation::class)->name('dashboard');
+
+    Route::prefix('organisations')->name('organisations.')->group(function () {
+        Route::get('setup', [\App\Http\Controllers\OrganisationController::class, 'setup'])->name('setup');
+        Route::get('join', [\App\Http\Controllers\OrganisationController::class, 'showJoinForm'])->name('join');
+        Route::post('join', [\App\Http\Controllers\OrganisationController::class, 'join'])->name('join.store');
+        Route::get('create', [\App\Http\Controllers\OrganisationController::class, 'showCreateForm'])->name('create');
+        Route::post('/', [\App\Http\Controllers\OrganisationController::class, 'store'])->name('store');
+        Route::get('{organisation}/dashboard', [\App\Http\Controllers\OrganisationController::class, 'dashboard'])->name('dashboard');
+    });
 });
 
 require __DIR__.'/settings.php';

@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
+use Laravel\Fortify\Contracts\RegisterResponse;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Fortify;
 
@@ -20,7 +21,25 @@ class FortifyServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->instance(RegisterResponse::class, new class implements RegisterResponse
+        {
+            public function toResponse($request)
+            {
+                $user = $request->user();
+
+                if ($user && $user->organisations()->count() === 0) {
+                    return redirect()->route('organisations.setup');
+                }
+
+                if ($user && $user->organisations()->count() > 0) {
+                    $organisation = $user->organisations()->first();
+
+                    return redirect()->route('organisations.dashboard', $organisation);
+                }
+
+                return redirect()->route('dashboard');
+            }
+        });
     }
 
     /**

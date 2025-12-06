@@ -29,7 +29,7 @@ test('dataset uuid is unique', function () {
 
     Dataset::factory()->create(['uuid' => $uuid]);
 
-    expect(fn() => Dataset::factory()->create(['uuid' => $uuid]))
+    expect(fn () => Dataset::factory()->create(['uuid' => $uuid]))
         ->toThrow(\Illuminate\Database\QueryException::class);
 });
 
@@ -257,7 +257,7 @@ test('pivot table prevents duplicate file-dataset associations', function () {
 
     $dataset->files()->attach($file->id);
 
-    expect(fn() => $dataset->files()->attach($file->id))
+    expect(fn () => $dataset->files()->attach($file->id))
         ->toThrow(\Illuminate\Database\QueryException::class);
 });
 
