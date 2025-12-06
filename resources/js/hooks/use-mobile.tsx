@@ -5,17 +5,17 @@ const MOBILE_BREAKPOINT = 768;
 const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`);
 
 function mediaQueryListener(callback: (event: MediaQueryListEvent) => void) {
-    mql.addEventListener('change', callback);
+  mql.addEventListener('change', callback);
 
-    return () => {
-        mql.removeEventListener('change', callback);
-    };
+  return () => {
+    mql.removeEventListener('change', callback);
+  };
 }
 
 function isSmallerThanBreakpoint() {
-    return mql.matches;
+  return mql.matches;
 }
 
 export function useIsMobile() {
-    return useSyncExternalStore(mediaQueryListener, isSmallerThanBreakpoint);
+  return useSyncExternalStore(mediaQueryListener, isSmallerThanBreakpoint);
 }

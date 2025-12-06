@@ -3,16 +3,16 @@ import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 export function cn(...inputs: ClassValue[]) {
-    return twMerge(clsx(inputs));
+  return twMerge(clsx(inputs));
 }
 
 export function isSameUrl(
-    url1: NonNullable<InertiaLinkProps['href']>,
-    url2: NonNullable<InertiaLinkProps['href']>,
+  url1: NonNullable<InertiaLinkProps['href']>,
+  url2: NonNullable<InertiaLinkProps['href']>,
 ) {
-    return resolveUrl(url1) === resolveUrl(url2);
+  return resolveUrl(url1) === resolveUrl(url2);
 }
 
 export function resolveUrl(url: NonNullable<InertiaLinkProps['href']>): string {
-    return typeof url === 'string' ? url : url.url;
+  return typeof url === 'string' ? url : url.url;
 }

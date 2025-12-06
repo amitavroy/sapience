@@ -3,10 +3,10 @@ import { NavMain } from '@/components/nav-main';
 import { NavOrganisation } from '@/components/nav-organisation';
 import { NavUser } from '@/components/nav-user';
 import {
-    Sidebar,
-    SidebarContent,
-    SidebarFooter,
-    SidebarHeader,
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
 import { index } from '@/routes/organisations/datasets';
@@ -15,51 +15,51 @@ import { usePage } from '@inertiajs/react';
 import { BookOpen, Database, Folder, LayoutGrid } from 'lucide-react';
 
 const footerNavItems: NavItem[] = [
-    {
-        title: 'Repository',
-        href: 'https://github.com/laravel/react-starter-kit',
-        icon: Folder,
-    },
-    {
-        title: 'Documentation',
-        href: 'https://laravel.com/docs/starter-kits#react',
-        icon: BookOpen,
-    },
+  {
+    title: 'Repository',
+    href: 'https://github.com/laravel/react-starter-kit',
+    icon: Folder,
+  },
+  {
+    title: 'Documentation',
+    href: 'https://laravel.com/docs/starter-kits#react',
+    icon: BookOpen,
+  },
 ];
 
 export function AppSidebar() {
-    const { currentOrganisation } = usePage<SharedData>().props;
+  const { currentOrganisation } = usePage<SharedData>().props;
 
-    const mainNavItems: NavItem[] = [
-        {
-            title: 'Dashboard',
-            href: dashboard(),
-            icon: LayoutGrid,
-        },
-    ];
+  const mainNavItems: NavItem[] = [
+    {
+      title: 'Dashboard',
+      href: dashboard(),
+      icon: LayoutGrid,
+    },
+  ];
 
-    if (currentOrganisation) {
-        mainNavItems.push({
-            title: 'Datasets',
-            href: index(currentOrganisation.uuid),
-            icon: Database,
-        });
-    }
+  if (currentOrganisation) {
+    mainNavItems.push({
+      title: 'Datasets',
+      href: index(currentOrganisation.uuid),
+      icon: Database,
+    });
+  }
 
-    return (
-        <Sidebar collapsible="icon" variant="inset">
-            <SidebarHeader>
-                <NavOrganisation />
-            </SidebarHeader>
+  return (
+    <Sidebar collapsible="icon" variant="inset">
+      <SidebarHeader>
+        <NavOrganisation />
+      </SidebarHeader>
 
-            <SidebarContent>
-                <NavMain items={mainNavItems} />
-            </SidebarContent>
+      <SidebarContent>
+        <NavMain items={mainNavItems} />
+      </SidebarContent>
 
-            <SidebarFooter>
-                <NavFooter items={footerNavItems} className="mt-auto" />
-                <NavUser />
-            </SidebarFooter>
-        </Sidebar>
-    );
+      <SidebarFooter>
+        <NavFooter items={footerNavItems} className="mt-auto" />
+        <NavUser />
+      </SidebarFooter>
+    </Sidebar>
+  );
 }
