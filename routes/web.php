@@ -25,6 +25,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('create', [\App\Http\Controllers\OrganisationController::class, 'showCreateForm'])->name('create');
         Route::post('/', [\App\Http\Controllers\OrganisationController::class, 'store'])->name('store');
         Route::get('{organisation}/dashboard', [\App\Http\Controllers\OrganisationController::class, 'dashboard'])->name('dashboard');
+
+        Route::resource('{organisation}/datasets', \App\Http\Controllers\DatasetController::class)
+            ->names([
+                'index' => 'datasets.index',
+                'create' => 'datasets.create',
+                'store' => 'datasets.store',
+                'show' => 'datasets.show',
+                'edit' => 'datasets.edit',
+                'update' => 'datasets.update',
+            ]);
     });
 });
 

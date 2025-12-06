@@ -87,4 +87,15 @@ class User extends Authenticatable
     {
         return $this->belongsTo(Organisation::class, 'last_organisation_id');
     }
+
+    /**
+     * Check if the user is an admin of the given organisation.
+     */
+    public function isAdminOf(Organisation $organisation): bool
+    {
+        return $this->organisations()
+            ->where('organisations.id', $organisation->id)
+            ->wherePivot('role', 'admin')
+            ->exists();
+    }
 }

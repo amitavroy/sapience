@@ -9,16 +9,10 @@ import {
     SidebarHeader,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
-import { type NavItem } from '@/types';
-import { BookOpen, Folder, LayoutGrid } from 'lucide-react';
-
-const mainNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
-    },
-];
+import { index } from '@/routes/organisations/datasets';
+import { type NavItem, type SharedData } from '@/types';
+import { usePage } from '@inertiajs/react';
+import { BookOpen, Database, Folder, LayoutGrid } from 'lucide-react';
 
 const footerNavItems: NavItem[] = [
     {
@@ -34,6 +28,24 @@ const footerNavItems: NavItem[] = [
 ];
 
 export function AppSidebar() {
+    const { currentOrganisation } = usePage<SharedData>().props;
+
+    const mainNavItems: NavItem[] = [
+        {
+            title: 'Dashboard',
+            href: dashboard(),
+            icon: LayoutGrid,
+        },
+    ];
+
+    if (currentOrganisation) {
+        mainNavItems.push({
+            title: 'Datasets',
+            href: index(currentOrganisation.uuid),
+            icon: Database,
+        });
+    }
+
     return (
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader>

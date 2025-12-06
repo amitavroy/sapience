@@ -28,6 +28,23 @@ export interface Organisation {
     name: string;
 }
 
+export interface Owner {
+    id: number;
+    name: string;
+}
+
+export interface Dataset {
+    id: number;
+    uuid: string;
+    name: string;
+    description: string | null;
+    is_active: boolean;
+    files_count: number;
+    owner: Owner;
+    created_at?: string;
+    updated_at?: string;
+}
+
 export interface SharedData {
     name: string;
     quote: { message: string; author: string };
