@@ -40,6 +40,12 @@
         }
     },
     "scripts": {
+        "ready": [
+            "php artisan test -p",
+            "./vendor/bin/pint",
+            "npm run format",
+            "npm run lint"
+        ],
         "setup": [
             "composer install",
             "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
