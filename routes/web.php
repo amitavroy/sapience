@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\FileController;
 use App\Http\Middleware\EnsureUserHasOrganisation;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -35,6 +36,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 'edit' => 'datasets.edit',
                 'update' => 'datasets.update',
             ]);
+
+        Route::prefix('{organisation}/datasets/{dataset}/files')->name('datasets.files.')->group(function () {
+            Route::post('request-upload', [FileController::class, 'requestUpload'])->name('request-upload');
+            Route::post('complete', [FileController::class, 'completeUpload'])->name('complete');
+            Route::get('/', [FileController::class, 'index'])->name('index');
+            Route::delete('{file}', [FileController::class, 'destroy'])->name('destroy');
+        });
     });
 });
 

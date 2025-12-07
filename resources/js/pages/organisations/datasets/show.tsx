@@ -1,3 +1,5 @@
+import FileUpload from '@/components/file-upload';
+import FilesTable, { type FilesTableRef } from '@/components/files-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -5,6 +7,7 @@ import { dashboard } from '@/routes/organisations';
 import { edit, index, show } from '@/routes/organisations/datasets';
 import { type BreadcrumbItem, type Dataset, type Organisation } from '@/types';
 import { Head, Link } from '@inertiajs/react';
+import { useRef } from 'react';
 
 interface ShowProps {
   organisation: Organisation;
@@ -17,6 +20,8 @@ export default function DatasetShow({
   dataset,
   isAdmin,
 }: ShowProps) {
+  const filesTableRef = useRef<FilesTableRef>(null);
+
   const breadcrumbs: BreadcrumbItem[] = [
     {
       title: 'Organisations',
@@ -114,6 +119,31 @@ export default function DatasetShow({
                   : 'N/A'}
               </p>
             </div>
+          </div>
+        </div>
+
+        <div className="grid gap-6">
+          <div className="rounded-xl border border-sidebar-border/70 p-6 dark:border-sidebar-border">
+            <h2 className="mb-4 text-lg font-semibold">Upload Files</h2>
+            <FileUpload
+              organisation={organisation}
+              dataset={dataset}
+              onUploadComplete={() => {
+                // Files table will refresh automatically via its own fetch
+              }}
+              onFilesValidated={(files) => {
+                filesTableRef.current?.addFiles(files);
+              }}
+            />
+          </div>
+
+          <div className="rounded-xl border border-sidebar-border/70 p-6 dark:border-sidebar-border">
+            <h2 className="mb-4 text-lg font-semibold">Files</h2>
+            <FilesTable
+              ref={filesTableRef}
+              organisation={organisation}
+              dataset={dataset}
+            />
           </div>
         </div>
       </div>

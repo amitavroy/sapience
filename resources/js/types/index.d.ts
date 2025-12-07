@@ -45,6 +45,30 @@ export interface Dataset {
   updated_at?: string;
 }
 
+export interface File {
+  id: number;
+  uuid: string;
+  original_filename: string;
+  filename: string;
+  file_size: number;
+  mime_type: string;
+  status: 'pending' | 'completed' | 'invalid';
+  user: {
+    id: number;
+    name: string;
+  };
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface PaginatedFiles {
+  data: File[];
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+}
+
 export interface SharedData {
   name: string;
   quote: { message: string; author: string };

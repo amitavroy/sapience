@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\FileStatus;
 use App\Models\Concerns\HasUniqueId;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -23,6 +24,7 @@ class File extends Model
         'filename',
         'file_size',
         'mime_type',
+        'status',
         'user_id',
     ];
 
@@ -36,6 +38,7 @@ class File extends Model
         return [
             'uuid' => 'string',
             'file_size' => 'integer',
+            'status' => FileStatus::class,
         ];
     }
 

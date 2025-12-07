@@ -77,4 +77,65 @@ return [
         public_path('storage') => storage_path('app/public'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Maximum File Size
+    |--------------------------------------------------------------------------
+    |
+    | The maximum file size allowed for uploads in bytes.
+    | Default is 100MB (100 * 1024 * 1024).
+    |
+    */
+
+    'max_file_size' => env('MAX_FILE_SIZE', 100 * 1024 * 1024),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Allowed MIME Types
+    |--------------------------------------------------------------------------
+    |
+    | List of allowed MIME types for file uploads.
+    | This includes images, PDFs, text files, Word documents, Excel files, and CSV files.
+    |
+    */
+
+    'allowed_mime_types' => [
+        // Images
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'image/gif',
+        'image/webp',
+        'image/svg+xml',
+        'image/bmp',
+        'image/tiff',
+        'image/x-icon',
+        // PDFs
+        'application/pdf',
+        // Text files
+        'text/plain',
+        'text/html',
+        'text/css',
+        'text/javascript',
+        'text/xml',
+        'application/xml',
+        'text/markdown',
+        // Word documents
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-word.document.macroEnabled.12',
+        // Excel files
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-excel.sheet.macroEnabled.12',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.template',
+        // CSV files
+        'text/csv',
+        'application/csv',
+        'text/x-csv',
+        'application/x-csv',
+        'text/comma-separated-values',
+        'application/vnd.ms-excel',
+    ],
+
 ];
