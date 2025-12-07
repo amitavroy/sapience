@@ -9,7 +9,7 @@ interface FileUploadProps {
   organisation: Organisation;
   dataset: Dataset;
   onUploadComplete?: () => void;
-  onFilesValidated?: (files: any[]) => void;
+  onFilesValidated?: (files: File[]) => void;
 }
 
 interface FileWithProgress {

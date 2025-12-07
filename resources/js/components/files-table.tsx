@@ -115,7 +115,7 @@ const FilesTable = forwardRef<FilesTableRef, FilesTableProps>(
 
     useEffect(() => {
       fetchFiles(currentPage, search);
-    }, [currentPage, fetchFiles]);
+    }, [currentPage, search, fetchFiles]);
 
     useEffect(() => {
       // Debounce search
@@ -135,7 +135,8 @@ const FilesTable = forwardRef<FilesTableRef, FilesTableProps>(
           clearTimeout(timeout);
         }
       };
-    }, [search, fetchFiles]);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [search]);
 
     const formatDate = (dateString?: string): string => {
       if (!dateString) {
