@@ -51,28 +51,8 @@ class FileController extends Controller
             $dataset
         );
 
-        $files = collect($validatedFiles)->map(function ($file) {
-            $file->load('user');
-
-            return [
-                'id' => $file->id,
-                'uuid' => $file->uuid,
-                'original_filename' => $file->original_filename,
-                'filename' => $file->filename,
-                'file_size' => $file->file_size,
-                'mime_type' => $file->mime_type,
-                'status' => $file->status,
-                'user' => [
-                    'id' => $file->user->id,
-                    'name' => $file->user->name,
-                ],
-                'created_at' => $file->created_at?->toISOString(),
-                'updated_at' => $file->updated_at?->toISOString(),
-            ];
-        })->values();
-
         return response()->json([
-            'files' => $files,
+            'files' => $validatedFiles,
         ]);
     }
 
@@ -97,29 +77,7 @@ class FileController extends Controller
 
         $files = $query->paginate($perPage);
 
-        return response()->json([
-            'data' => collect($files->items())->map(function ($file) {
-                return [
-                    'id' => $file->id,
-                    'uuid' => $file->uuid,
-                    'original_filename' => $file->original_filename,
-                    'filename' => $file->filename,
-                    'file_size' => $file->file_size,
-                    'mime_type' => $file->mime_type,
-                    'status' => $file->status,
-                    'user' => [
-                        'id' => $file->user->id,
-                        'name' => $file->user->name,
-                    ],
-                    'created_at' => $file->created_at?->toISOString(),
-                    'updated_at' => $file->updated_at?->toISOString(),
-                ];
-            })->values(),
-            'current_page' => $files->currentPage(),
-            'last_page' => $files->lastPage(),
-            'per_page' => $files->perPage(),
-            'total' => $files->total(),
-        ]);
+        return response()->json($files);
     }
 
     /**

@@ -21,6 +21,7 @@ class CompleteFileUploadAction
             ->whereHas('datasets', function ($query) use ($dataset) {
                 $query->where('datasets.id', $dataset->id);
             })
+            ->with('user')
             ->get();
 
         $validatedFiles = [];

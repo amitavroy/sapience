@@ -11,14 +11,14 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
-import { formatFileSize } from '@/lib/utils';
+import { formatFileSize, toRelativeUrl } from '@/lib/utils';
 import {
   type Dataset,
   type File,
   type Organisation,
-  type PaginatedFiles,
+  type PaginatedData,
 } from '@/types';
-import { ChevronLeft, ChevronRight, Search, Trash2 } from 'lucide-react';
+import { Search, Trash2 } from 'lucide-react';
 import {
   forwardRef,
   useCallback,
@@ -40,10 +40,9 @@ export interface FilesTableRef {
 
 const FilesTable = forwardRef<FilesTableRef, FilesTableProps>(
   function FilesTable({ organisation, dataset }, ref) {
-    const [files, setFiles] = useState<PaginatedFiles | null>(null);
+    const [files, setFiles] = useState<PaginatedData<File> | null>(null);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
-    const [currentPage, setCurrentPage] = useState(1);
     const [searchDebounce, setSearchDebounce] = useState<NodeJS.Timeout | null>(
       null,
     );
@@ -53,36 +52,42 @@ const FilesTable = forwardRef<FilesTableRef, FilesTableProps>(
     >(null);
 
     const fetchFiles = useCallback(
-      async (page: number = 1, searchQuery: string = '') => {
+      async (urlOrPage: string | number = 1, searchQuery: string = '') => {
         setLoading(true);
         try {
-          const params = new URLSearchParams({
-            page: page.toString(),
-            per_page: '15',
-          });
+          let url: string;
+          if (typeof urlOrPage === 'string') {
+            // Laravel pagination returns full URLs, convert to relative
+            url = toRelativeUrl(urlOrPage);
+          } else {
+            // Build URL from page number
+            const params = new URLSearchParams({
+              page: urlOrPage.toString(),
+              per_page: '15',
+            });
 
-          if (searchQuery) {
-            params.append('search', searchQuery);
+            if (searchQuery) {
+              params.append('search', searchQuery);
+            }
+
+            url = `/organisations/${organisation.uuid}/datasets/${dataset.uuid}/files?${params.toString()}`;
           }
 
-          const response = await fetch(
-            `/organisations/${organisation.uuid}/datasets/${dataset.uuid}/files?${params.toString()}`,
-            {
-              headers: {
-                Accept: 'application/json',
-                'X-CSRF-TOKEN':
-                  document
-                    .querySelector('meta[name="csrf-token"]')
-                    ?.getAttribute('content') || '',
-              },
+          const response = await fetch(url, {
+            headers: {
+              Accept: 'application/json',
+              'X-CSRF-TOKEN':
+                document
+                  .querySelector('meta[name="csrf-token"]')
+                  ?.getAttribute('content') || '',
             },
-          );
+          });
 
           if (!response.ok) {
             throw new Error('Failed to fetch files');
           }
 
-          const data: PaginatedFiles = await response.json();
+          const data: PaginatedData<File> = await response.json();
           setFiles(data);
         } catch (error) {
           console.error('Error fetching files:', error);
@@ -109,13 +114,15 @@ const FilesTable = forwardRef<FilesTableRef, FilesTableProps>(
         });
       },
       refresh: () => {
-        fetchFiles(currentPage, search);
+        if (files) {
+          fetchFiles(files.current_page, search);
+        }
       },
     }));
 
     useEffect(() => {
-      fetchFiles(currentPage, search);
-    }, [currentPage, search, fetchFiles]);
+      fetchFiles(1, search);
+    }, [search, fetchFiles]);
 
     useEffect(() => {
       // Debounce search
@@ -124,7 +131,6 @@ const FilesTable = forwardRef<FilesTableRef, FilesTableProps>(
       }
 
       const timeout = setTimeout(() => {
-        setCurrentPage(1);
         fetchFiles(1, search);
       }, 500);
 
@@ -190,7 +196,9 @@ const FilesTable = forwardRef<FilesTableRef, FilesTableProps>(
         }
 
         // Refresh the file list
-        await fetchFiles(currentPage, search);
+        if (files) {
+          await fetchFiles(files.current_page, search);
+        }
       } catch (error) {
         console.error('Error deleting file:', error);
         alert('Failed to delete file. Please try again.');
@@ -347,37 +355,43 @@ const FilesTable = forwardRef<FilesTableRef, FilesTableProps>(
               </table>
             </div>
 
-            {files && files.last_page > 1 && (
-              <div className="flex items-center justify-between">
+            {files && (
+              <>
                 <div className="text-sm text-muted-foreground">
-                  Showing {files.data.length} of {files.total} files
+                  Showing {files.from || 0} to {files.to || 0} of {files.total}{' '}
+                  files
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage === 1 || loading}
-                  >
-                    <ChevronLeft className="size-4" />
-                    Previous
-                  </Button>
-                  <div className="text-sm text-muted-foreground">
-                    Page {files.current_page} of {files.last_page}
+                <div className="py-4">
+                  <div className="-mb-1 flex flex-wrap">
+                    {files.links.map((link, key) =>
+                      link.url === null ? (
+                        <div
+                          key={key}
+                          className="mr-1 mb-1 rounded border px-4 py-3 text-sm leading-4 text-gray-400"
+                          dangerouslySetInnerHTML={{ __html: link.label }}
+                        />
+                      ) : (
+                        <button
+                          key={`link-${key}`}
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (link.url) {
+                              fetchFiles(link.url);
+                            }
+                          }}
+                          className={`mr-1 mb-1 rounded border px-4 py-3 text-sm leading-4 hover:bg-white focus:border-indigo-500 focus:text-indigo-500 dark:hover:bg-neutral-900 ${link.active ? 'bg-white dark:bg-neutral-900' : ''}`}
+                          disabled={loading}
+                        >
+                          <span
+                            dangerouslySetInnerHTML={{ __html: link.label }}
+                          />
+                        </button>
+                      ),
+                    )}
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setCurrentPage((p) => Math.min(files.last_page, p + 1))
-                    }
-                    disabled={currentPage === files.last_page || loading}
-                  >
-                    Next
-                    <ChevronRight className="size-4" />
-                  </Button>
                 </div>
-              </div>
+              </>
             )}
           </>
         )}
