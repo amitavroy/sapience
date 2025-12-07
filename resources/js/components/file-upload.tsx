@@ -146,14 +146,20 @@ export default function FileUpload({
             files: files.map((f) => ({
               original_filename: f.file.name,
               file_size: f.file.size,
-              mime_type: f.file.type,
+              mime_type: f.file.type || 'application/octet-stream', // Fallback for empty MIME types
             })),
           }),
         },
       );
 
       if (!response.ok) {
-        throw new Error('Failed to request upload URLs');
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage =
+          errorData.message ||
+          (errorData.errors
+            ? Object.values(errorData.errors).flat().join(', ')
+            : 'Failed to request upload URLs');
+        throw new Error(errorMessage);
       }
 
       const { upload_data } = await response.json();

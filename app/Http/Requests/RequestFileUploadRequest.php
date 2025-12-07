@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Models\Dataset;
 use App\Models\Organisation;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class RequestFileUploadRequest extends FormRequest
 {
@@ -43,7 +44,12 @@ class RequestFileUploadRequest extends FormRequest
             'files' => ['required', 'array', 'min:1', 'max:50'],
             'files.*.original_filename' => ['required', 'string', 'max:255'],
             'files.*.file_size' => ['required', 'integer', 'min:1', 'max:'.$maxFileSize],
-            'files.*.mime_type' => ['required', 'string', 'max:255', 'in:'.implode(',', $allowedMimeTypes)],
+            'files.*.mime_type' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::in($allowedMimeTypes),
+            ],
         ];
     }
 }
