@@ -8,7 +8,17 @@ use App\Models\User;
 use Illuminate\Support\Facades\Storage;
 
 test('organisation member can request file upload URLs', function () {
-    Storage::fake('s3');
+    // Create a mock disk that supports temporaryUploadUrl
+    $mockDisk = \Mockery::mock(\Illuminate\Contracts\Filesystem\Filesystem::class);
+    $mockDisk->shouldReceive('temporaryUploadUrl')
+        ->andReturn([
+            'url' => 'https://example.com/upload',
+            'headers' => ['Content-Type' => 'application/octet-stream'],
+        ]);
+
+    Storage::shouldReceive('disk')
+        ->with('s3')
+        ->andReturn($mockDisk);
 
     $user = User::factory()->create();
     $organisation = Organisation::factory()->create();
@@ -153,7 +163,7 @@ test('organisation member can complete file upload', function () {
 
     // Verify file status was updated to completed
     $file->refresh();
-    $this->assertEquals(FileStatus::Completed->value, $file->status);
+    $this->assertEquals(FileStatus::Completed, $file->status);
 });
 
 test('invalid file is marked as invalid and deleted from S3', function () {
@@ -191,7 +201,7 @@ test('invalid file is marked as invalid and deleted from S3', function () {
 
     // Verify file status was updated to invalid
     $file->refresh();
-    $this->assertEquals(FileStatus::Invalid->value, $file->status);
+    $this->assertEquals(FileStatus::Invalid, $file->status);
 
     // Verify file was deleted from S3
     $this->assertFalse(Storage::disk('s3')->exists($s3Path));
@@ -356,5 +366,5 @@ test('complete upload only validates files belonging to dataset', function () {
 
     // File2 should not be validated because it doesn't belong to dataset1
     $file2->refresh();
-    $this->assertEquals(FileStatus::Pending->value, $file2->status);
+    $this->assertEquals(FileStatus::Pending, $file2->status);
 });

@@ -15,6 +15,7 @@ test('dataset can be created with uuid and required fields', function () {
         'description' => 'Test Description',
         'owner_id' => $user->id,
         'organisation_id' => $organisation->id,
+        'is_active' => true,
     ]);
 
     expect($dataset->name)->toBe('Test Dataset');
