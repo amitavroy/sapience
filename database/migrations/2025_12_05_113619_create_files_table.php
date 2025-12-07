@@ -19,6 +19,7 @@ return new class extends Migration
             $table->string('filename');
             $table->unsignedBigInteger('file_size');
             $table->string('mime_type');
+            $table->string('status')->default('pending');
             $table->foreignIdFor(User::class);
             $table->timestamps();
         });

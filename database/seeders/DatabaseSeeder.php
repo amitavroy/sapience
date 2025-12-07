@@ -2,9 +2,10 @@
 
 namespace Database\Seeders;
 
-use App\Models\Organisation;
-// use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use App\Models\User;
+// use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use App\Models\Dataset;
+use App\Models\Organisation;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
@@ -28,6 +29,14 @@ class DatabaseSeeder extends Seeder
             'name' => 'Devzone',
         ]);
         $organisation->users()->attach($user->id, ['role' => 'admin']);
+
+        // Create a dataset for $organisation
+        Dataset::create([
+            'name' => 'Devzone',
+            'description' => 'This is the dataset for the Devzone organisation',
+            'owner_id' => $user->id,
+            'organisation_id' => $organisation->id,
+        ]);
 
         // Johon Doe user
         $johnDoe = User::firstOrCreate([
