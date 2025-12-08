@@ -3,8 +3,10 @@
 namespace App\Actions;
 
 use App\Enums\FileStatus;
+use App\Jobs\ProcessFileForVectorStore;
 use App\Models\Dataset;
 use App\Models\File;
+use App\Services\UtilService;
 use Illuminate\Support\Facades\Storage;
 
 class CompleteFileUploadAction
@@ -28,7 +30,7 @@ class CompleteFileUploadAction
         $disk = 's3';
 
         foreach ($files as $file) {
-            $s3Path = "datasets/{$dataset->id}/files/{$file->filename}";
+            $s3Path = UtilService::getFileS3Path($dataset, $file);
 
             try {
                 // Check if file exists in S3
@@ -90,7 +92,11 @@ class CompleteFileUploadAction
                 }
 
                 // Mark as completed
-                $file->update(['status' => FileStatus::Completed->value]);
+                $file->update(['status' => FileStatus::Processing->value]);
+
+                // Dispatch ProcessFileForVectorStore Job
+                ProcessFileForVectorStore::dispatch($file->id);
+
                 $validatedFiles[] = $file;
             } catch (\Exception $e) {
                 // If validation fails, mark as invalid and delete from S3

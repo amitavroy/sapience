@@ -2,9 +2,12 @@
 
 use App\Http\Controllers\FileController;
 use App\Http\Middleware\EnsureUserHasOrganisation;
+use App\Neuron\SapienceBot;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
+use NeuronAI\Chat\Messages\UserMessage;
+use NeuronAI\RAG\DataLoader\FileDataLoader;
 
 Route::get('/', function () {
     return Inertia::render('welcome', [
@@ -47,3 +50,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 require __DIR__.'/settings.php';
+
+Route::get('chat', function () {
+    $response = SapienceBot::make()
+        ->chat(new UserMessage('Who is Amitav Roy?'));
+
+    echo $response->getContent();
+});
+
+Route::get('test', function () {
+    // SapienceBot::make()->addDocuments(
+    //     FileDataLoader::for(storage_path('app/docs/todo.md'))
+    //         ->getDocuments()
+    // );
+    // return FileDataLoader::for(storage_path('app/docs/todo.md'))
+    //     ->getDocuments();
+});

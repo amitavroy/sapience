@@ -15,7 +15,8 @@
         "laravel/framework": "^12.41.1",
         "laravel/tinker": "^2.10.2",
         "laravel/wayfinder": "^0.1.12",
-        "league/flysystem-aws-s3-v3": "^3.0"
+        "league/flysystem-aws-s3-v3": "^3.0",
+        "neuron-core/neuron-ai": "^2.9"
     },
     "require-dev": {
         "fakerphp/faker": "^1.24.1",
@@ -57,7 +58,7 @@
         ],
         "dev": [
             "Composer\\Config::disableProcessTimeout",
-            "npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1\" \"php artisan pail --timeout=0\" \"npm run dev\" --names=server,queue,logs,vite --kill-others"
+            "npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1 --timeout=120\" \"php artisan pail --timeout=0\" \"npm run dev\" --names=server,queue,logs,vite --kill-others"
         ],
         "dev:ssr": [
             "npm run build:ssr",
