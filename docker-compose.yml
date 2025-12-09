@@ -1,0 +1,100 @@
+networks:
+  sapience:
+
+services:
+  php:
+    build:
+      context: .
+      dockerfile: ./docker/php/php.dockerfile
+      target: development
+      args:
+        USER_ID: ${UID:-1000}
+        GROUP_ID: ${GID:-1000}
+    ports:
+      - ${APP_PORT:-80}:8080
+    volumes:
+      - .:/var/www/html
+    networks:
+      - sapience
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - mysql
+      - phpmyadmin
+      - redis
+
+  mysql:
+    image: mariadb:lts
+    restart: unless-stopped
+    tty: true
+    user: root
+    ports:
+      - ${DB_EXTERNAL_PORT:-3307}:3306
+    volumes:
+      - ./docker/data/mysql:/var/lib/mysql
+    networks:
+      - sapience
+    environment:
+      MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: 1
+      MARIADB_DATABASE: ${DB_DATABASE:-sapience}
+      MARIADB_USER: ${DB_USERNAME:-sapience}
+      MARIADB_PASSWORD: ${DB_PASSWORD:-sapience}
+
+  phpmyadmin:
+    depends_on:
+      - mysql
+    image: phpmyadmin
+    restart: unless-stopped
+    ports:
+      - ${DB_ADMIN_UI:-8081}:80
+    networks:
+      - sapience
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-}
+      MYSQL_USER: ${DB_USERNAME:-root}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-}
+      PMA_HOST: mysql
+
+  redis:
+    image: redis:latest
+    restart: unless-stopped
+    tty: true
+    ports:
+      - ${REDIS_PORT:-6379}:6379
+    networks:
+      - sapience
+
+  mailpit:
+    image: axllent/mailpit:v1.16
+    restart: unless-stopped
+    ports:
+      - ${MAILPIT_WEBUI:-8025}:8025
+      - ${MAILPIT_SMTP:-1025}:1025
+    volumes:
+      - ./docker/data/mailpit:/data
+    networks:
+      - sapience
+    environment:
+      MP_DATABASE: /data/mailpit.db
+      MP_SMTP_AUTH_ALLOW_INSECURE: true
+      MP_MAX_MESSAGES: ${MAILPIT_MESSAGES:-100}
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    ports:
+      - ${MINIO_API_PORT:-9000}:9000
+      - ${MINIO_CONSOLE_PORT:-9001}:9001
+    volumes:
+      - ./docker/data/minio:/data
+    networks:
+      - sapience
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
