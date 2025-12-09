@@ -12,6 +12,7 @@ use NeuronAI\RAG\Embeddings\OpenAIEmbeddingsProvider;
 use NeuronAI\RAG\RAG;
 use NeuronAI\RAG\VectorStore\FileVectorStore;
 use NeuronAI\RAG\VectorStore\VectorStoreInterface;
+use NeuronAI\SystemPrompt;
 
 class SapienceBot extends RAG
 {
@@ -41,6 +42,24 @@ class SapienceBot extends RAG
             topK: 10,
             name: 'sapience', // sapience-<dataset-id>
             ext: '.store',
+        );
+    }
+
+    public function instructions(): string
+    {
+        return (string) new SystemPrompt(
+            background: [
+                "You are a helpful assistant that can answer questions about the documents in the vector store.",
+                "You should use the documents in the vector store to answer the questions.",
+                "Do not make up information, only answer questions based on the documents in the vector store.",
+            ],
+            output: [
+                "Answer the question in the same language as the question.",
+                "Answers should be concise and to the point.",
+                "Also, ask if the user wants to know more about anything else.",
+                "Mention some other points that the user might be interested in based on his question and the documents in the vector store.",
+                "Do not mention documents. Just saw based on my knowledge."
+            ],
         );
     }
 }
