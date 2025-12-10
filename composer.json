@@ -16,7 +16,9 @@
         "laravel/tinker": "^2.10.2",
         "laravel/wayfinder": "^0.1.12",
         "league/flysystem-aws-s3-v3": "^3.0",
-        "neuron-core/neuron-ai": "^2.9"
+        "neuron-core/neuron-ai": "^2.9",
+        "symfony/http-client": "*",
+        "typesense/typesense-php": "*"
     },
     "require-dev": {
         "fakerphp/faker": "^1.24.1",

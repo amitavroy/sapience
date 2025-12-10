@@ -41,4 +41,11 @@ return [
         'embeddings_model' => env('OPENAI_EMBEDDINGS_MODEL', 'text-embedding-3-large'),
     ],
 
+    'typesense' => [
+        'host' => env('TYPESENSE_HOST', 'localhost'),
+        'port' => env('TYPESENSE_PORT', '8108'),
+        'protocol' => env('TYPESENSE_PROTOCOL', 'http'),
+        'api_key' => env('TYPESENSE_API_KEY', 'xyz'),
+    ],
+
 ];

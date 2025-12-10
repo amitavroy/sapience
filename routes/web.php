@@ -52,8 +52,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 require __DIR__.'/settings.php';
 
 Route::get('chat', function () {
-    $response = SapienceBot::make()
-        ->chat(new UserMessage('Who is Amitav Roy?'));
+    // Requires organisationId and datasetId
+    $response = (new SapienceBot(
+        organisationId: 1,
+        datasetId: 2,
+    ))->chat(new UserMessage('When did I go to Hampi?'));
 
     echo $response->getContent();
 });

@@ -99,3 +99,28 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+
+  typesense:
+    image: typesense/typesense:29.0
+    restart: unless-stopped
+    ports:
+      - ${TYPESENSE_PORT:-8108}:8108
+    volumes:
+      - ./docker/data/typesense:/data
+    command: '--data-dir /data --api-key=${TYPESENSE_API_KEY:-xyz} --enable-cors'
+    networks:
+      - sapience
+
+  typesense-dashboard:
+    image: ghcr.io/bfritscher/typesense-dashboard:latest
+    restart: unless-stopped
+    ports:
+      - ${TYPESENSE_DASHBOARD_PORT:-8109}:80
+    networks:
+      - sapience
+    environment:
+      TYPESENSE_SERVER: http://typesense:8108
+      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-xyz}
+    depends_on:
+      - typesense
+

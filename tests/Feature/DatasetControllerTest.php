@@ -4,6 +4,7 @@ use App\Models\Dataset;
 use App\Models\File;
 use App\Models\Organisation;
 use App\Models\User;
+use Mockery;
 
 test('user can view datasets index for their organisation', function () {
     $user = User::factory()->create();
@@ -156,6 +157,13 @@ test('admin can create a dataset', function () {
     $user = User::factory()->create();
     $organisation = Organisation::factory()->create();
     $user->organisations()->attach($organisation->id, ['role' => 'admin']);
+
+    $typesenseService = Mockery::mock(\App\Services\TypesenseService::class);
+    $typesenseService->shouldReceive('createCollection')
+        ->once()
+        ->with($organisation->id, Mockery::type('int'));
+
+    $this->app->instance(\App\Services\TypesenseService::class, $typesenseService);
 
     $response = $this->actingAs($user)->post(
         route('organisations.datasets.store', $organisation),

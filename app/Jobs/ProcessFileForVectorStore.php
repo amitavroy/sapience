@@ -117,8 +117,11 @@ class ProcessFileForVectorStore implements ShouldQueue
 
             try {
                 // Measure time taken to add documents to vector store
-                [, $duration] = Benchmark::value(function () use ($tempPath) {
-                    SapienceBot::make()->addDocuments(
+                [, $duration] = Benchmark::value(function () use ($tempPath, $organisation, $dataset) {
+                    (new SapienceBot(
+                        organisationId: $organisation->id,
+                        datasetId: $dataset->id,
+                    ))->addDocuments(
                         documents: FileDataLoader::for($tempPath)->getDocuments()
                     );
                 });

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Neuron;
 
+use App\Services\TypesenseService;
 use NeuronAI\Providers\AIProviderInterface;
 use NeuronAI\Providers\HttpClientOptions;
 use NeuronAI\Providers\OpenAI\OpenAI;
@@ -11,11 +12,19 @@ use NeuronAI\RAG\Embeddings\EmbeddingsProviderInterface;
 use NeuronAI\RAG\Embeddings\OpenAIEmbeddingsProvider;
 use NeuronAI\RAG\RAG;
 use NeuronAI\RAG\VectorStore\FileVectorStore;
+use NeuronAI\RAG\VectorStore\TypesenseVectorStore;
 use NeuronAI\RAG\VectorStore\VectorStoreInterface;
 use NeuronAI\SystemPrompt;
 
 class SapienceBot extends RAG
 {
+    public function __construct(
+        public readonly int $organisationId,
+        public readonly int $datasetId,
+    ) {
+        //
+    }
+
     protected function provider(): AIProviderInterface
     {
         return new OpenAI(
@@ -35,13 +44,31 @@ class SapienceBot extends RAG
         );
     }
 
+    protected function getEmbeddingDimension(): int
+    {
+        return TypesenseService::getEmbeddingDimension();
+    }
+
     protected function vectorStore(): VectorStoreInterface
     {
-        return new FileVectorStore(
-            directory: storage_path('app'),
-            topK: 10,
-            name: 'sapience', // sapience-<dataset-id>
-            ext: '.store',
+        // return new FileVectorStore(
+        //     directory: storage_path('app'),
+        //     topK: 10,
+        //     name: 'sapience', // sapience-<dataset-id>
+        //     ext: '.store',
+        // );
+        $typesenseService = app(TypesenseService::class);
+        $client = $typesenseService->getClient();
+
+        $collectionName = $typesenseService->getCollectionName(
+            $this->organisationId,
+            $this->datasetId
+        );
+
+        return new TypesenseVectorStore(
+            client: $client,
+            collection: $collectionName,
+            vectorDimension: $this->getEmbeddingDimension(),
         );
     }
 
@@ -49,16 +76,16 @@ class SapienceBot extends RAG
     {
         return (string) new SystemPrompt(
             background: [
-                "You are a helpful assistant that can answer questions about the documents in the vector store.",
-                "You should use the documents in the vector store to answer the questions.",
-                "Do not make up information, only answer questions based on the documents in the vector store.",
+                'You are a helpful assistant that can answer questions about the documents in the vector store.',
+                'You should use the documents in the vector store to answer the questions.',
+                'Do not make up information, only answer questions based on the documents in the vector store.',
             ],
             output: [
-                "Answer the question in the same language as the question.",
-                "Answers should be concise and to the point.",
-                "Also, ask if the user wants to know more about anything else.",
-                "Mention some other points that the user might be interested in based on his question and the documents in the vector store.",
-                "Do not mention documents. Just saw based on my knowledge."
+                'Answer the question in the same language as the question.',
+                'Answers should be concise and to the point.',
+                'Also, ask if the user wants to know more about anything else.',
+                'Mention some other points that the user might be interested in based on his question and the documents in the vector store.',
+                'Do not mention documents. Just saw based on my knowledge.',
             ],
         );
     }
