@@ -8,4 +8,5 @@ enum FileStatus: string
     case Completed = 'completed';
     case Invalid = 'invalid';
     case Processing = 'processing';
+    case Failed = 'failed';
 }

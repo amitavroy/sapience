@@ -19,8 +19,13 @@ test('organisation member can request file upload URLs', function () {
         ]);
 
     Storage::shouldReceive('disk')
-        ->with('s3')
+        ->with('minio')
         ->andReturn($mockDisk);
+
+    Storage::shouldReceive('forgetDisk')
+        ->with('minio')
+        ->zeroOrMoreTimes()
+        ->andReturnNull();
 
     $user = User::factory()->create();
     $organisation = Organisation::factory()->create();

@@ -6,9 +6,9 @@ use App\Enums\FileStatus;
 use App\Models\Dataset;
 use App\Models\File;
 use App\Models\User;
+use App\Services\SignedUrlService;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class RequestFileUploadAction
@@ -19,10 +19,13 @@ class RequestFileUploadAction
      * @param  array<int, array{original_filename: string, file_size: int, mime_type: string}>  $files
      * @return array<int, array{file_id: int, upload_url: string, headers: array<string, string>}>
      */
+    public function __construct(
+        private readonly SignedUrlService $signedUrlService
+    ) {}
+
     public function execute(array $files, Dataset $dataset, User $user): array
     {
         $results = [];
-        $disk = 's3';
 
         foreach ($files as $fileData) {
             $originalFilename = Arr::get($fileData, 'original_filename');
@@ -51,12 +54,12 @@ class RequestFileUploadAction
                 return $file;
             });
 
-            // Generate S3 path
-            $s3Path = "datasets/{$dataset->id}/files/{$filename}";
+            // Generate storage path
+            $storagePath = "datasets/{$dataset->id}/files/{$filename}";
 
             // Generate temporary upload URL (expires in 1 hour)
-            ['url' => $uploadUrl, 'headers' => $headers] = Storage::disk($disk)->temporaryUploadUrl(
-                $s3Path,
+            ['url' => $uploadUrl, 'headers' => $headers] = $this->signedUrlService->generateSignedUploadUrl(
+                $storagePath,
                 now()->addHour()
             );
 
