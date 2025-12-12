@@ -1,15 +1,13 @@
 <?php
 
+use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\DatasetController;
 use App\Http\Controllers\FileController;
 use App\Http\Controllers\OrganisationController;
 use App\Http\Middleware\EnsureUserHasOrganisation;
-use App\Neuron\SapienceBot;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
-use NeuronAI\Chat\Messages\UserMessage;
-use NeuronAI\RAG\DataLoader\FileDataLoader;
 
 Route::get('/', function () {
     return Inertia::render('welcome', [
@@ -49,26 +47,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/', [FileController::class, 'index'])->name('index');
             Route::delete('{file}', [FileController::class, 'destroy'])->name('destroy');
         });
+
+        Route::prefix('{organisation}/datasets/{dataset}/conversations')->name('datasets.conversations.')->group(function () {
+            Route::post('/', [ConversationController::class, 'store'])->name('store');
+            Route::get('{conversation}', [ConversationController::class, 'show'])->name('show');
+        });
+    });
+
+    Route::prefix('api/v1')->name('api.v1.')->group(function () {
+        Route::post('conversations/{conversation}/messages', [ConversationController::class, 'sendMessage'])->name('conversations.messages.store');
     });
 });
 
 require __DIR__.'/settings.php';
-
-Route::get('chat', function () {
-    // Requires organisationId and datasetId
-    $response = (new SapienceBot(
-        organisationId: 1,
-        datasetId: 2,
-    ))->chat(new UserMessage('When did I go to Hampi?'));
-
-    echo $response->getContent();
-});
-
-Route::get('test', function () {
-    // SapienceBot::make()->addDocuments(
-    //     FileDataLoader::for(storage_path('app/docs/todo.md'))
-    //         ->getDocuments()
-    // );
-    // return FileDataLoader::for(storage_path('app/docs/todo.md'))
-    //     ->getDocuments();
-});

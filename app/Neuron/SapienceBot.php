@@ -4,14 +4,16 @@ declare(strict_types=1);
 
 namespace App\Neuron;
 
+use App\Models\Message;
 use App\Services\TypesenseService;
+use NeuronAI\Chat\History\ChatHistoryInterface;
+use NeuronAI\Chat\History\EloquentChatHistory;
 use NeuronAI\Providers\AIProviderInterface;
 use NeuronAI\Providers\HttpClientOptions;
 use NeuronAI\Providers\OpenAI\OpenAI;
 use NeuronAI\RAG\Embeddings\EmbeddingsProviderInterface;
 use NeuronAI\RAG\Embeddings\OpenAIEmbeddingsProvider;
 use NeuronAI\RAG\RAG;
-use NeuronAI\RAG\VectorStore\FileVectorStore;
 use NeuronAI\RAG\VectorStore\TypesenseVectorStore;
 use NeuronAI\RAG\VectorStore\VectorStoreInterface;
 use NeuronAI\SystemPrompt;
@@ -21,6 +23,7 @@ class SapienceBot extends RAG
     public function __construct(
         public readonly int $organisationId,
         public readonly int $datasetId,
+        public readonly int $threadId,
     ) {
         //
     }
@@ -51,18 +54,12 @@ class SapienceBot extends RAG
 
     protected function vectorStore(): VectorStoreInterface
     {
-        // return new FileVectorStore(
-        //     directory: storage_path('app'),
-        //     topK: 10,
-        //     name: 'sapience', // sapience-<dataset-id>
-        //     ext: '.store',
-        // );
         $typesenseService = app(TypesenseService::class);
         $client = $typesenseService->getClient();
 
         $collectionName = $typesenseService->getCollectionName(
-            $this->organisationId,
-            $this->datasetId
+            organisationId: $this->organisationId,
+            datasetId: $this->datasetId
         );
 
         return new TypesenseVectorStore(
@@ -87,6 +84,15 @@ class SapienceBot extends RAG
                 'Mention some other points that the user might be interested in based on his question and the documents in the vector store.',
                 'Do not mention documents. Just saw based on my knowledge.',
             ],
+        );
+    }
+
+    protected function chatHistory(): ChatHistoryInterface
+    {
+        return new EloquentChatHistory(
+            threadId: (string) $this->threadId,
+            modelClass: Message::class,
+            contextWindow: 50000
         );
     }
 }

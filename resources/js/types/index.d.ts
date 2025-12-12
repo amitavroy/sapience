@@ -45,6 +45,22 @@ export interface Dataset {
   updated_at?: string;
 }
 
+export interface Conversation {
+  id: number;
+  uuid: string;
+  title: string | null;
+  organisation: Organisation;
+  dataset: Dataset;
+  user: User;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Message {
+  content: string;
+  role: 'user' | 'assistant';
+}
+
 export interface File {
   id: number;
   uuid: string;
