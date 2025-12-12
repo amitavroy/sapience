@@ -1,3 +1,4 @@
+import DatasetInfo from '@/components/dataset-info';
 import FileUpload from '@/components/file-upload';
 import FilesTable, { type FilesTableRef } from '@/components/files-table';
 import { Badge } from '@/components/ui/badge';
@@ -74,56 +75,12 @@ export default function DatasetShow({
           )}
         </div>
 
-        <div className="grid gap-6 rounded-xl border border-sidebar-border/70 p-6 dark:border-sidebar-border">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <h3 className="mb-1 text-sm font-medium text-muted-foreground">
-                Status
-              </h3>
-              <p className="text-sm">
-                {dataset.is_active ? 'Active' : 'Inactive'}
-              </p>
-            </div>
-            <div>
-              <h3 className="mb-1 text-sm font-medium text-muted-foreground">
-                Files
-              </h3>
-              <p className="text-sm">
-                {dataset.files_count} file
-                {dataset.files_count !== 1 ? 's' : ''}
-              </p>
-            </div>
-            <div>
-              <h3 className="mb-1 text-sm font-medium text-muted-foreground">
-                Owner
-              </h3>
-              <p className="text-sm">{dataset.owner.name}</p>
-            </div>
-            <div>
-              <h3 className="mb-1 text-sm font-medium text-muted-foreground">
-                Created
-              </h3>
-              <p className="text-sm">
-                {dataset.created_at
-                  ? new Date(dataset.created_at).toLocaleDateString()
-                  : 'N/A'}
-              </p>
-            </div>
-            <div>
-              <h3 className="mb-1 text-sm font-medium text-muted-foreground">
-                Updated
-              </h3>
-              <p className="text-sm">
-                {dataset.updated_at
-                  ? new Date(dataset.updated_at).toLocaleDateString()
-                  : 'N/A'}
-              </p>
-            </div>
+        <div className="flex flex-col gap-6 md:flex-row">
+          <div className="flex-[0.4]">
+            <DatasetInfo dataset={dataset} organisation={organisation} />
           </div>
-        </div>
 
-        <div className="grid gap-6">
-          <div className="rounded-xl border border-sidebar-border/70 p-6 dark:border-sidebar-border">
+          <div className="flex-[0.6] rounded-xl border border-sidebar-border/70 p-6 dark:border-sidebar-border">
             <h2 className="mb-4 text-lg font-semibold">Upload Files</h2>
             <FileUpload
               organisation={organisation}
@@ -136,15 +93,15 @@ export default function DatasetShow({
               }}
             />
           </div>
+        </div>
 
-          <div className="rounded-xl border border-sidebar-border/70 p-6 dark:border-sidebar-border">
-            <h2 className="mb-4 text-lg font-semibold">Files</h2>
-            <FilesTable
-              ref={filesTableRef}
-              organisation={organisation}
-              dataset={dataset}
-            />
-          </div>
+        <div className="rounded-xl border border-sidebar-border/70 p-6 dark:border-sidebar-border">
+          <h2 className="mb-4 text-lg font-semibold">Files</h2>
+          <FilesTable
+            ref={filesTableRef}
+            organisation={organisation}
+            dataset={dataset}
+          />
         </div>
       </div>
     </AppLayout>
