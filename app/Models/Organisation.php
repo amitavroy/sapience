@@ -51,4 +51,12 @@ class Organisation extends Model
     {
         return $this->hasMany(Dataset::class);
     }
+
+    /**
+     * Get the conversations that belong to the organisation.
+     */
+    public function conversations(): HasMany
+    {
+        return $this->hasMany(Conversation::class);
+    }
 }

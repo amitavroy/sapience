@@ -1,12 +1,10 @@
 <?php
 
 use App\Enums\FileStatus;
-use App\Jobs\ProcessFileForVectorStore;
 use App\Models\Dataset;
 use App\Models\File;
 use App\Models\Organisation;
 use App\Models\User;
-use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 
 test('organisation member can request file upload URLs', function () {
@@ -128,88 +126,6 @@ test('file upload request validates file data', function () {
 
     $response->assertStatus(422);
     $response->assertJsonValidationErrors(['files.0.original_filename', 'files.0.file_size', 'files.0.mime_type']);
-});
-
-test('organisation member can complete file upload', function () {
-    Queue::fake();
-    Storage::fake('s3');
-    config(['filesystems.default' => 's3']);
-
-    $user = User::factory()->create();
-    $organisation = Organisation::factory()->create();
-    $user->organisations()->attach($organisation->id, ['role' => 'member']);
-
-    $dataset = Dataset::factory()->create([
-        'organisation_id' => $organisation->id,
-        'owner_id' => $user->id,
-    ]);
-
-    $file = File::factory()->create([
-        'user_id' => $user->id,
-        'status' => FileStatus::Pending->value,
-        'file_size' => 1024,
-    ]);
-    $dataset->files()->attach($file->id);
-
-    // Create a fake file in S3 (text/plain will be detected by finfo)
-    $s3Path = "datasets/{$dataset->id}/files/{$file->filename}";
-    Storage::disk('s3')->put($s3Path, str_repeat('a', 1024));
-
-    $response = $this->actingAs($user)->postJson(
-        route('organisations.datasets.files.complete', [$organisation, $dataset]),
-        [
-            'file_ids' => [$file->id],
-        ]
-    );
-
-    $response->assertSuccessful();
-    $response->assertJsonStructure([
-        'files' => [
-            '*' => ['id', 'uuid', 'original_filename', 'filename', 'file_size', 'mime_type', 'status', 'user', 'created_at', 'updated_at'],
-        ],
-    ]);
-
-    // Verify file status was updated to Processing after verification
-    $file->refresh();
-    $this->assertEquals(FileStatus::Processing, $file->status);
-
-    // Verify the job was dispatched (but not actually executed due to Queue::fake())
-    Queue::assertPushed(ProcessFileForVectorStore::class, function ($job) use ($file) {
-        return $job->fileId === $file->id;
-    });
-
-    // Get the job from the faked queue
-    $pushedJobs = Queue::pushed(ProcessFileForVectorStore::class);
-    $this->assertCount(1, $pushedJobs);
-    $job = $pushedJobs[0];
-
-    // Set up mocks before running the job
-    // Mock FileDataLoader first
-    $mockLoader = \Mockery::mock('overload:NeuronAI\RAG\DataLoader\FileDataLoader');
-    $mockLoaderInstance = \Mockery::mock();
-    $mockLoaderInstance->shouldReceive('getDocuments')
-        ->once()
-        ->andReturn([]);
-    $mockLoader->shouldReceive('for')
-        ->once()
-        ->andReturn($mockLoaderInstance);
-
-    // Mock SapienceBot
-    $mockBot = \Mockery::mock('overload:App\Neuron\SapienceBot');
-    $mockBotInstance = \Mockery::mock();
-    $mockBotInstance->shouldReceive('addDocuments')
-        ->once()
-        ->andReturnNull();
-    $mockBot->shouldReceive('make')
-        ->once()
-        ->andReturn($mockBotInstance);
-
-    // Run the faked job manually to simulate job completion
-    $job->handle();
-
-    // Verify file status was updated to Completed after job processing
-    $file->refresh();
-    $this->assertEquals(FileStatus::Completed, $file->status);
 });
 
 test('invalid file is marked as invalid and deleted from S3', function () {

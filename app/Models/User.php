@@ -81,6 +81,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Get the conversations started by the user.
+     */
+    public function conversations(): HasMany
+    {
+        return $this->hasMany(Conversation::class);
+    }
+
+    /**
      * Get the last organisation the user accessed.
      */
     public function lastOrganisation(): BelongsTo
