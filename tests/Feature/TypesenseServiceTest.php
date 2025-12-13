@@ -153,7 +153,7 @@ test('createCollection successfully creates collection', function () {
         ->once()
         ->with(Mockery::on(function ($schema) use ($collectionName) {
             return $schema['name'] === $collectionName
-                && count($schema['fields']) === 8
+                && count($schema['fields']) === 11
                 && $schema['enable_nested_fields'] === true;
         }))
         ->andReturn(['name' => $collectionName]);

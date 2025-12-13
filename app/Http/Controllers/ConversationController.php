@@ -6,6 +6,7 @@ use App\Actions\CreateConversationAction;
 use App\Actions\DeleteConversationAction;
 use App\Http\Requests\DeleteConversationRequest;
 use App\Http\Requests\SendMessageRequest;
+use App\Jobs\CreateConversationTitle;
 use App\Models\Conversation;
 use App\Models\Dataset;
 use App\Models\Organisation;
@@ -118,11 +119,20 @@ class ConversationController extends Controller
         $datasetId = (int) $conversation->dataset_id;
         $threadId = $conversation->id;
 
+        // Check if this is the first message in the conversation
+        $isFirstMessage = $conversation->messages()->count() === 0;
+
         $response = (new SapienceBot(
             organisationId: $organisationId,
             datasetId: $datasetId,
             threadId: $threadId,
         ))->chat(new UserMessage($request->input('content')));
+
+        // If this was the first message, dispatch job to create conversation title
+        if ($isFirstMessage) {
+            CreateConversationTitle::dispatch($conversation->id)
+                ->delay(now()->addSeconds(2));
+        }
 
         return response()->json([
             'message' => [
