@@ -121,6 +121,7 @@ class ProcessFileForVectorStore implements ShouldQueue
                     (new SapienceBot(
                         organisationId: $organisation->id,
                         datasetId: $dataset->id,
+                        threadId: 0,
                     ))->addDocuments(
                         documents: FileDataLoader::for($tempPath)->getDocuments()
                     );
