@@ -2,7 +2,7 @@
 
 namespace Database\Seeders;
 
-use App\Models\Dataset;
+use App\Actions\CreateDatasetAction;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use App\Models\Organisation;
 use App\Models\User;
@@ -31,12 +31,11 @@ class DatabaseSeeder extends Seeder
         $organisation->users()->attach($user->id, ['role' => 'admin']);
 
         // Create a dataset for $organisation
-        Dataset::create([
+        $createDatasetAction = app(CreateDatasetAction::class);
+        $createDatasetAction->execute([
             'name' => 'Devzone',
             'description' => 'This is the dataset for the Devzone organisation',
-            'owner_id' => $user->id,
-            'organisation_id' => $organisation->id,
-        ]);
+        ], $organisation, $user);
 
         // Johon Doe user
         $johnDoe = User::firstOrCreate([
