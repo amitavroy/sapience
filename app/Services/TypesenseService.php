@@ -126,6 +126,24 @@ class TypesenseService
                     'optional' => true,
                 ],
                 [
+                    'name' => 'original_filename',
+                    'type' => 'string',
+                    'facet' => true,
+                    'optional' => true,
+                ],
+                [
+                    'name' => 'filename',
+                    'type' => 'string',
+                    'facet' => true,
+                    'optional' => true,
+                ],
+                [
+                    'name' => 'mime_type',
+                    'type' => 'string',
+                    'facet' => true,
+                    'optional' => true,
+                ],
+                [
                     'name' => 'created_at',
                     'type' => 'int64',
                     'optional' => true,

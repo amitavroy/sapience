@@ -116,14 +116,26 @@ class ProcessFileForVectorStore implements ShouldQueue
             file_put_contents($tempPath, $fileContent);
 
             try {
+                // Get documents from FileDataLoader
+                $documents = FileDataLoader::for($tempPath)->getDocuments();
+
+                // Enrich each document with file metadata
+                foreach ($documents as $index => $document) {
+                    $document->addMetadata('file_id', (string) $file->id);
+                    $document->addMetadata('file_uuid', $file->uuid);
+                    $document->addMetadata('original_filename', $file->original_filename);
+                    $document->addMetadata('filename', $file->filename);
+                    $document->addMetadata('mime_type', $file->mime_type);
+                    $document->addMetadata('chunk_index', $index);
+                }
+
                 // Measure time taken to add documents to vector store
-                [, $duration] = Benchmark::value(function () use ($tempPath, $organisation, $dataset) {
+                [, $duration] = Benchmark::value(function () use ($documents, $organisation, $dataset) {
                     (new SapienceBot(
                         organisationId: $organisation->id,
                         datasetId: $dataset->id,
-                        threadId: 0,
                     ))->addDocuments(
-                        documents: FileDataLoader::for($tempPath)->getDocuments()
+                        documents: $documents
                     );
                 });
 

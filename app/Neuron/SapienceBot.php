@@ -23,7 +23,7 @@ class SapienceBot extends RAG
     public function __construct(
         public readonly int $organisationId,
         public readonly int $datasetId,
-        public readonly int $threadId,
+        public readonly ?int $threadId = null,
     ) {
         //
     }
@@ -90,7 +90,7 @@ class SapienceBot extends RAG
     protected function chatHistory(): ChatHistoryInterface
     {
         return new EloquentChatHistory(
-            threadId: (string) $this->threadId,
+            threadId: (string) ($this->threadId ?? 0),
             modelClass: Message::class,
             contextWindow: 50000
         );

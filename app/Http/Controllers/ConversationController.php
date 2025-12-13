@@ -114,10 +114,6 @@ class ConversationController extends Controller
      */
     public function sendMessage(SendMessageRequest $request, Conversation $conversation): JsonResponse
     {
-        logger('sendMessage', [
-            'request' => $request->validated(),
-            'conversation' => $conversation,
-        ]);
         $organisationId = (int) $conversation->organisation_id;
         $datasetId = (int) $conversation->dataset_id;
         $threadId = $conversation->id;
