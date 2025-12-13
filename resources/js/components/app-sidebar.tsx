@@ -9,10 +9,17 @@ import {
   SidebarHeader,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import { index as conversationsIndex } from '@/routes/organisations/conversations';
 import { index } from '@/routes/organisations/datasets';
 import { type NavItem, type SharedData } from '@/types';
 import { usePage } from '@inertiajs/react';
-import { BookOpen, Database, Folder, LayoutGrid } from 'lucide-react';
+import {
+  BookOpen,
+  Database,
+  Folder,
+  LayoutGrid,
+  MessageSquare,
+} from 'lucide-react';
 
 const footerNavItems: NavItem[] = [
   {
@@ -39,11 +46,18 @@ export function AppSidebar() {
   ];
 
   if (currentOrganisation) {
-    mainNavItems.push({
-      title: 'Datasets',
-      href: index(currentOrganisation.uuid),
-      icon: Database,
-    });
+    mainNavItems.push(
+      {
+        title: 'Datasets',
+        href: index(currentOrganisation.uuid),
+        icon: Database,
+      },
+      {
+        title: 'Conversations',
+        href: conversationsIndex(currentOrganisation.uuid),
+        icon: MessageSquare,
+      },
+    );
   }
 
   return (

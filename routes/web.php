@@ -31,6 +31,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::get('{organisation}/dashboard', [OrganisationController::class, 'dashboard'])->name('dashboard');
 
+        Route::prefix('{organisation}/conversations')->name('conversations.')->group(function () {
+            Route::get('/', [ConversationController::class, 'index'])->name('index');
+            Route::delete('{conversation}', [ConversationController::class, 'destroy'])->name('destroy');
+        });
+
         Route::resource('{organisation}/datasets', DatasetController::class)
             ->names([
                 'index' => 'datasets.index',

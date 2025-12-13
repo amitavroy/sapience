@@ -5,12 +5,9 @@
     ],
     "editors": [
         "claude_code",
-        "cursor",
-        "phpstorm",
-        "vscode"
+        "cursor"
     ],
     "guidelines": [
         "laravel/fortify"
-    ],
-    "herd_mcp": true
+    ]
 }
