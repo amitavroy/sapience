@@ -12,6 +12,7 @@ use Illuminate\Support\Benchmark;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use NeuronAI\RAG\DataLoader\FileDataLoader;
+use NeuronAI\RAG\DataLoader\PdfReader;
 
 class ProcessFileForVectorStore implements ShouldQueue
 {
@@ -116,8 +117,19 @@ class ProcessFileForVectorStore implements ShouldQueue
             file_put_contents($tempPath, $fileContent);
 
             try {
+                // Get file extension
+                $extension = strtolower(pathinfo($file->filename, PATHINFO_EXTENSION));
+
                 // Get documents from FileDataLoader
-                $documents = FileDataLoader::for($tempPath)->getDocuments();
+                $documents = FileDataLoader::for($tempPath);
+
+                // Add reader based on file extension
+                match ($extension) {
+                    'pdf' => $documents->addReader('pdf', new PdfReader),
+                    default => throw new \Exception('Unsupported file extension'),
+                };
+
+                $documents = $documents->getDocuments();
 
                 // Enrich each document with file metadata
                 foreach ($documents as $index => $document) {

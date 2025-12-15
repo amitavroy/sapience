@@ -8,8 +8,6 @@ use App\Http\Middleware\EnsureUserHasOrganisation;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
-use NeuronAI\RAG\DataLoader\FileDataLoader;
-use NeuronAI\RAG\DataLoader\PdfReader;
 
 Route::get('/', function () {
     return Inertia::render('welcome', [
@@ -67,10 +65,3 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 require __DIR__.'/settings.php';
-
-Route::get('pdf', function () {
-    $documents = FileDataLoader::for(storage_path('app/temp/statement.pdf'))
-        ->addReader('pdf', new PdfReader())->getDocuments();
-
-        return $documents;
-});
