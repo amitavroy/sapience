@@ -11,6 +11,12 @@ FROM base AS development
 # Switch to root so we can do root things
 USER root
 
+# Install Poppler utilities
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends poppler-utils && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
 # Adding packages for Code coverage
 RUN install-php-extensions pcov
 
@@ -36,6 +42,16 @@ USER www-data
 # Since we're calling "base", production isn't
 # calling any of that permission stuff
 FROM base AS production
+
+USER root
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends poppler-utils && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Drop back to our unprivileged user
+USER www-data
 
 # Copy our app files as www-data (33:33)
 COPY --chown=www-data:www-data . /var/www/html
