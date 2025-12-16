@@ -124,10 +124,9 @@ class ProcessFileForVectorStore implements ShouldQueue
                 $documents = FileDataLoader::for($tempPath);
 
                 // Add reader based on file extension
-                match ($extension) {
-                    'pdf' => $documents->addReader('pdf', new PdfReader),
-                    default => throw new \Exception('Unsupported file extension'),
-                };
+                if ($extension === 'pdf') {
+                    $documents->addReader('pdf', new PdfReader);
+                }
 
                 $documents = $documents->getDocuments();
 

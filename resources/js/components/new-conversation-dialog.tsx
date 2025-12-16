@@ -56,15 +56,19 @@ export function NewConversationDialog({
       dataset: selectedDataset.uuid,
     });
 
-    router.post(route.url, {}, {
-      onFinish: () => {
-        setIsSubmitting(false);
-        handleClose();
+    router.post(
+      route.url,
+      {},
+      {
+        onFinish: () => {
+          setIsSubmitting(false);
+          handleClose();
+        },
+        onError: () => {
+          setIsSubmitting(false);
+        },
       },
-      onError: () => {
-        setIsSubmitting(false);
-      },
-    });
+    );
   };
 
   return (
@@ -109,7 +113,9 @@ export function NewConversationDialog({
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={!selectedDatasetId || isSubmitting || datasets.length === 0}
+            disabled={
+              !selectedDatasetId || isSubmitting || datasets.length === 0
+            }
           >
             {isSubmitting ? 'Creating...' : 'Create Chat'}
           </Button>
@@ -118,4 +124,3 @@ export function NewConversationDialog({
     </Dialog>
   );
 }
-
