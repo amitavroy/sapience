@@ -332,6 +332,70 @@ test('dataset update requires name', function () {
     $response->assertSessionHasErrors('name');
 });
 
+test('admin can update dataset with instructions and output instructions', function () {
+    $user = User::factory()->create();
+    $organisation = Organisation::factory()->create();
+    $user->organisations()->attach($organisation->id, ['role' => 'admin']);
+
+    $dataset = Dataset::factory()->create([
+        'organisation_id' => $organisation->id,
+        'owner_id' => $user->id,
+        'name' => 'Original Name',
+    ]);
+
+    $response = $this->actingAs($user)->put(
+        route('organisations.datasets.update', [$organisation, $dataset]),
+        [
+            'name' => 'Updated Name',
+            'instructions' => "Custom instruction 1\nCustom instruction 2",
+            'output_instructions' => "Output instruction 1\nOutput instruction 2",
+        ]
+    );
+
+    $response->assertRedirect();
+    $response->assertSessionHas('success');
+
+    $this->assertDatabaseHas('datasets', [
+        'id' => $dataset->id,
+        'name' => 'Updated Name',
+        'instructions' => "Custom instruction 1\nCustom instruction 2",
+        'output_instructions' => "Output instruction 1\nOutput instruction 2",
+    ]);
+});
+
+test('admin can update dataset without instructions', function () {
+    $user = User::factory()->create();
+    $organisation = Organisation::factory()->create();
+    $user->organisations()->attach($organisation->id, ['role' => 'admin']);
+
+    $dataset = Dataset::factory()->create([
+        'organisation_id' => $organisation->id,
+        'owner_id' => $user->id,
+        'name' => 'Original Name',
+        'instructions' => 'Original Instructions',
+        'output_instructions' => 'Original Output Instructions',
+    ]);
+
+    $response = $this->actingAs($user)->put(
+        route('organisations.datasets.update', [$organisation, $dataset]),
+        [
+            'name' => 'Updated Name',
+            'instructions' => null,
+            'output_instructions' => null,
+        ]
+    );
+
+    $response->assertRedirect();
+    $response->assertSessionHas('success');
+
+    $this->assertDatabaseHas('datasets', [
+        'id' => $dataset->id,
+        'name' => 'Updated Name',
+        'instructions' => null,
+        'output_instructions' => null,
+    ]);
+});
+
 test('datasets index shows file count', function () {
     $user = User::factory()->create();
     $organisation = Organisation::factory()->create();

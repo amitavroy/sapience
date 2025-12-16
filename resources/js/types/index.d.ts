@@ -38,6 +38,8 @@ export interface Dataset {
   uuid: string;
   name: string;
   description: string | null;
+  instructions: string | null;
+  output_instructions: string | null;
   is_active: boolean;
   files_count: number;
   owner: Owner;

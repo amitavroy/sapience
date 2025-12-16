@@ -22,6 +22,8 @@ class Dataset extends Model
     protected $fillable = [
         'name',
         'description',
+        'instructions',
+        'output_instructions',
         'is_active',
         'owner_id',
         'organisation_id',

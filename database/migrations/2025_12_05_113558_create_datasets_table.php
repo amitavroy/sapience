@@ -18,6 +18,8 @@ return new class extends Migration
             $table->uuid('uuid')->unique();
             $table->string('name');
             $table->text('description')->nullable();
+            $table->text('instructions')->nullable();
+            $table->text('output_instructions')->nullable();
             $table->boolean('is_active')->default(true);
             $table->foreignIdFor(User::class, 'owner_id');
             $table->foreignIdFor(Organisation::class);

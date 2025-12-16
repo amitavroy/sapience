@@ -15,6 +15,8 @@ class UpdateDatasetAction
         $dataset->update([
             'name' => Arr::get($validated, 'name'),
             'description' => Arr::get($validated, 'description'),
+            'instructions' => Arr::get($validated, 'instructions'),
+            'output_instructions' => Arr::get($validated, 'output_instructions'),
         ]);
 
         return $dataset->fresh();
