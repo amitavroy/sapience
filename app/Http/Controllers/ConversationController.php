@@ -6,6 +6,7 @@ use App\Actions\CreateConversationAction;
 use App\Actions\DeleteConversationAction;
 use App\Http\Requests\DeleteConversationRequest;
 use App\Http\Requests\SendMessageRequest;
+use App\Http\Requests\StoreConversationRequest;
 use App\Jobs\CreateConversationTitle;
 use App\Models\Conversation;
 use App\Models\Dataset;
@@ -47,21 +48,9 @@ class ConversationController extends Controller
     /**
      * Store a newly created conversation.
      */
-    public function store(Request $request, Organisation $organisation, Dataset $dataset, CreateConversationAction $action): RedirectResponse
+    public function store(StoreConversationRequest $request, Organisation $organisation, Dataset $dataset, CreateConversationAction $action): RedirectResponse
     {
-        $user = $request->user();
-
-        // Ensure user belongs to this organisation
-        if (! $user->organisations()->where('organisations.id', $organisation->id)->exists()) {
-            abort(403);
-        }
-
-        // Ensure dataset belongs to this organisation
-        if ($dataset->organisation_id !== $organisation->id) {
-            abort(404);
-        }
-
-        $conversation = $action->execute($organisation, $dataset, $user);
+        $conversation = $action->execute($organisation, $dataset, $request->user());
 
         return redirect()
             ->route('organisations.datasets.conversations.show', [$organisation, $dataset, $conversation]);
