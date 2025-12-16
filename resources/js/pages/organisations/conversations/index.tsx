@@ -1,4 +1,5 @@
 import { ConversationCard } from '@/components/conversation-card';
+import { NewConversationDialog } from '@/components/new-conversation-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
@@ -7,6 +8,7 @@ import { index as conversationsIndex } from '@/routes/organisations/conversation
 import {
   type BreadcrumbItem,
   type Conversation,
+  type Dataset,
   type Organisation,
   type PaginatedData,
   type SharedData,
@@ -18,14 +20,17 @@ import { useState } from 'react';
 interface IndexProps {
   organisation: Organisation;
   conversations: PaginatedData<Conversation>;
+  datasets: Dataset[];
 }
 
 export default function ConversationsIndex({
   organisation,
   conversations,
+  datasets,
 }: IndexProps) {
   const { auth } = usePage<SharedData>().props;
   const [search, setSearch] = useState('');
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const handleDelete = () => {
     router.reload({ only: ['conversations'] });
@@ -52,8 +57,15 @@ export default function ConversationsIndex({
       <div className="flex h-full flex-1 flex-col overflow-hidden rounded-xl p-4">
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-bold">Chats</h1>
-          <Button>+ New chat</Button>
+          <Button onClick={() => setIsDialogOpen(true)}>+ New chat</Button>
         </div>
+
+        <NewConversationDialog
+          organisation={organisation}
+          datasets={datasets}
+          open={isDialogOpen}
+          onOpenChange={setIsDialogOpen}
+        />
 
         <div className="relative mb-4">
           <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />

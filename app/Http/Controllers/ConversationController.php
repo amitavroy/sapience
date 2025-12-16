@@ -12,6 +12,7 @@ use App\Models\Conversation;
 use App\Models\Dataset;
 use App\Models\Organisation;
 use App\Neuron\SapienceBot;
+use App\Queries\GetOrganisationDatasetsQuery;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,7 +25,7 @@ class ConversationController extends Controller
     /**
      * Display a listing of conversations for an organisation.
      */
-    public function index(Request $request, Organisation $organisation): Response
+    public function index(Request $request, Organisation $organisation, GetOrganisationDatasetsQuery $query): Response
     {
         $user = $request->user();
 
@@ -39,9 +40,14 @@ class ConversationController extends Controller
             ->orderBy('updated_at', 'desc')
             ->paginate(15);
 
+        $datasets = $query->execute($organisation)
+            ->where('is_active', true)
+            ->get();
+
         return Inertia::render('organisations/conversations/index', [
             'organisation' => $organisation,
             'conversations' => $conversations,
+            'datasets' => $datasets,
         ]);
     }
 
