@@ -57,7 +57,7 @@ services:
     image: phpmyadmin
     restart: unless-stopped
     ports:
-      - ${DB_ADMIN_UI:-8081}:80
+      - ${DB_ADMIN_UI:-8080}:80
     networks:
       - sapience
     environment:
