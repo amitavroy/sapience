@@ -11,17 +11,18 @@ use Illuminate\Support\Facades\Storage;
 class DeleteFileAction
 {
     /**
-     * Delete a file from database and S3 if applicable.
+     * Delete a file from database and storage if applicable.
      */
     public function execute(File $file, Dataset $dataset): void
     {
-        // Delete from S3 if file was uploaded (completed or invalid status)
+        // Delete from storage if file was uploaded (completed or invalid status)
         // Invalid files should have been deleted during validation, but we'll try anyway
         if ($file->status === FileStatus::Completed || $file->status === FileStatus::Invalid) {
             $s3Path = "datasets/{$dataset->id}/files/{$file->filename}";
+            $diskName = env('FILESYSTEM_UPLOADS_DISK', 'minio');
 
             try {
-                $disk = Storage::disk('s3');
+                $disk = Storage::disk($diskName);
 
                 // Check if file exists first
                 $exists = $disk->exists($s3Path);
@@ -30,7 +31,7 @@ class DeleteFileAction
                     $disk->delete($s3Path);
                 }
             } catch (\Exception $e) {
-                // Continue with database deletion even if S3 deletion fails
+                // Continue with database deletion even if storage deletion fails
             }
         }
 

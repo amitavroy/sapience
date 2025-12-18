@@ -27,7 +27,7 @@ class CompleteFileUploadAction
             ->get();
 
         $validatedFiles = [];
-        $disk = 's3';
+        $disk = env('FILESYSTEM_UPLOADS_DISK', 'minio');
 
         foreach ($files as $file) {
             $s3Path = UtilService::getFileS3Path($dataset, $file);

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Log;
 use Typesense\Client;
 use Typesense\Exceptions\ObjectNotFound;
 use Typesense\Exceptions\TypesenseClientError;
@@ -157,6 +158,31 @@ class TypesenseService
         } catch (TypesenseClientError $e) {
             throw new \RuntimeException(
                 "Failed to create Typesense collection '{$collectionName}': {$e->getMessage()}",
+                0,
+                $e
+            );
+        }
+    }
+
+    /**
+     * Delete a Typesense collection for the given organisation and dataset.
+     */
+    public function deleteCollection(int $organisationId, int $datasetId): void
+    {
+        $collectionName = $this->getCollectionName($organisationId, $datasetId);
+
+        try {
+            $this->client->collections[$collectionName]->delete();
+        } catch (ObjectNotFound $e) {
+            // Collection doesn't exist, which is fine - log and continue
+            Log::warning('Typesense collection not found during deletion.', [
+                'collection_name' => $collectionName,
+                'organisation_id' => $organisationId,
+                'dataset_id' => $datasetId,
+            ]);
+        } catch (TypesenseClientError $e) {
+            throw new \RuntimeException(
+                "Failed to delete Typesense collection '{$collectionName}': {$e->getMessage()}",
                 0,
                 $e
             );

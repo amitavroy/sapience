@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Actions\CreateDatasetAction;
+use App\Actions\DeleteDatasetAction;
 use App\Actions\UpdateDatasetAction;
 use App\Http\Requests\CreateDatasetRequest;
+use App\Http\Requests\DeleteDatasetRequest;
 use App\Http\Requests\UpdateDatasetRequest;
 use App\Models\Dataset;
 use App\Models\Organisation;
@@ -97,7 +99,7 @@ class DatasetController extends Controller
             abort(404);
         }
 
-        $dataset->loadCount('files')->load('owner');
+        $dataset->loadCount(['files', 'conversations'])->load('owner');
 
         $isAdmin = $user->isAdminOf($organisation);
 
@@ -151,5 +153,30 @@ class DatasetController extends Controller
         return redirect()
             ->route('organisations.datasets.show', [$organisation, $dataset])
             ->with('success', 'Dataset updated successfully.');
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     */
+    public function destroy(
+        DeleteDatasetRequest $request,
+        Organisation $organisation,
+        Dataset $dataset,
+        DeleteDatasetAction $action
+    ): RedirectResponse {
+        // Ensure dataset belongs to this organisation
+        if ($dataset->organisation_id !== $organisation->id) {
+            abort(404);
+        }
+
+        $action->execute(
+            $dataset,
+            $request->boolean('delete_files'),
+            $request->boolean('delete_conversations')
+        );
+
+        return redirect()
+            ->route('organisations.datasets.index', [$organisation])
+            ->with('success', 'Dataset deleted successfully.');
     }
 }

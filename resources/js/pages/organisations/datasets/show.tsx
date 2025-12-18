@@ -1,4 +1,5 @@
 import DatasetInfo from '@/components/dataset-info';
+import { DeleteDatasetDialog } from '@/components/delete-dataset-dialog';
 import FileUpload from '@/components/file-upload';
 import FilesTable, { type FilesTableRef } from '@/components/files-table';
 import { Badge } from '@/components/ui/badge';
@@ -8,7 +9,7 @@ import { dashboard } from '@/routes/organisations';
 import { edit, index, show } from '@/routes/organisations/datasets';
 import { type BreadcrumbItem, type Dataset, type Organisation } from '@/types';
 import { Head, Link } from '@inertiajs/react';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 
 interface ShowProps {
   organisation: Organisation;
@@ -22,6 +23,7 @@ export default function DatasetShow({
   isAdmin,
 }: ShowProps) {
   const filesTableRef = useRef<FilesTableRef>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -62,16 +64,24 @@ export default function DatasetShow({
             )}
           </div>
           {isAdmin && (
-            <Link
-              href={
-                edit({
-                  organisation: organisation.uuid,
-                  dataset: dataset.uuid,
-                }).url
-              }
-            >
-              <Button variant="outline">Edit Dataset</Button>
-            </Link>
+            <div className="flex gap-2">
+              <Link
+                href={
+                  edit({
+                    organisation: organisation.uuid,
+                    dataset: dataset.uuid,
+                  }).url
+                }
+              >
+                <Button variant="outline">Edit Dataset</Button>
+              </Link>
+              <DeleteDatasetDialog
+                organisation={organisation}
+                dataset={dataset}
+                open={deleteDialogOpen}
+                onOpenChange={setDeleteDialogOpen}
+              />
+            </div>
           )}
         </div>
 

@@ -42,6 +42,7 @@ export interface Dataset {
   output_instructions: string | null;
   is_active: boolean;
   files_count: number;
+  conversations_count?: number;
   owner: Owner;
   created_at?: string;
   updated_at?: string;

@@ -87,13 +87,15 @@ class ProcessFileForVectorStore implements ShouldQueue
                 ],
             ]);
 
-            // get the file from S3
+            // get the file from storage
             $s3Path = UtilService::getFileS3Path($dataset, $file);
+            $diskName = env('FILESYSTEM_UPLOADS_DISK', 'minio');
 
-            if (! Storage::disk('s3')->exists($s3Path)) {
-                Log::error('File not found in S3', [
+            if (! Storage::disk($diskName)->exists($s3Path)) {
+                Log::error('File not found in storage', [
                     'file_id' => $file->id,
                     'file_uuid' => $file->uuid,
+                    'disk' => $diskName,
                     's3_path' => $s3Path,
                 ]);
 
@@ -102,7 +104,7 @@ class ProcessFileForVectorStore implements ShouldQueue
                 return;
             }
 
-            $fileContent = Storage::disk('s3')->get($s3Path);
+            $fileContent = Storage::disk($diskName)->get($s3Path);
 
             // save the S3 file into storage/temp folder as a temporary file
             $tempPath = storage_path('app/temp/'.$file->filename);
