@@ -5,6 +5,7 @@ use App\Models\Dataset;
 use App\Models\File;
 use App\Models\Organisation;
 use App\Models\User;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Storage;
 
 test('organisation member can request file upload URLs', function () {
@@ -130,7 +131,9 @@ test('file upload request validates file data', function () {
 
 test('invalid file is marked as invalid and deleted from S3', function () {
     Storage::fake('s3');
-    config(['filesystems.default' => 's3']);
+    Config::set('filesystems.default', 's3');
+    Config::set('filesystems.uploads_disk', 's3');
+    putenv('FILESYSTEM_UPLOADS_DISK=s3');
 
     $user = User::factory()->create();
     $organisation = Organisation::factory()->create();
@@ -183,7 +186,7 @@ test('organisation member can list files with pagination', function () {
     $dataset->files()->attach($files->pluck('id'));
 
     $response = $this->actingAs($user)->getJson(
-        route('organisations.datasets.files.index', [$organisation, $dataset]).'?page=1&per_page=10'
+        route('organisations.datasets.files.index', [$organisation, $dataset]) . '?page=1&per_page=10'
     );
 
     $response->assertSuccessful();
@@ -226,7 +229,7 @@ test('organisation member can search files by filename', function () {
     $dataset->files()->attach([$file1->id, $file2->id]);
 
     $response = $this->actingAs($user)->getJson(
-        route('organisations.datasets.files.index', [$organisation, $dataset]).'?search=test-document'
+        route('organisations.datasets.files.index', [$organisation, $dataset]) . '?search=test-document'
     );
 
     $response->assertSuccessful();
