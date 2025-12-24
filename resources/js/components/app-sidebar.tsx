@@ -11,6 +11,7 @@ import {
 import { dashboard } from '@/routes';
 import { index as conversationsIndex } from '@/routes/organisations/conversations';
 import { index } from '@/routes/organisations/datasets';
+import { index as researchIndex } from '@/routes/organisations/research/index';
 import { type NavItem, type SharedData } from '@/types';
 import { usePage } from '@inertiajs/react';
 import {
@@ -56,6 +57,11 @@ export function AppSidebar() {
         title: 'Conversations',
         href: conversationsIndex(currentOrganisation.uuid),
         icon: MessageSquare,
+      },
+      {
+        title: 'Research',
+        href: researchIndex(currentOrganisation.uuid),
+        icon: BookOpen,
       },
     );
   }

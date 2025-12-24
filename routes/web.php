@@ -4,6 +4,7 @@ use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\DatasetController;
 use App\Http\Controllers\FileController;
 use App\Http\Controllers\OrganisationController;
+use App\Http\Controllers\ResearchController;
 use App\Http\Middleware\EnsureUserHasOrganisation;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -57,6 +58,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/', [ConversationController::class, 'store'])->name('store');
             Route::get('{conversation}', [ConversationController::class, 'show'])->name('show');
         });
+
+        Route::resource('{organisation}/research', ResearchController::class)
+            ->names([
+                'index' => 'research.index',
+                'create' => 'research.create',
+                'store' => 'research.store',
+                'show' => 'research.show',
+                'edit' => 'research.edit',
+                'update' => 'research.update',
+                'destroy' => 'research.destroy',
+            ]);
     });
 
     Route::prefix('api/v1')->name('api.v1.')->group(function () {

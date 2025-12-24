@@ -48,4 +48,8 @@ return [
         'api_key' => env('TYPESENSE_API_KEY', 'xyz'),
     ],
 
+    'search' => [
+        'host' => env('SEARCH_HOST', 'http://searxng:8888'),
+    ],
+
 ];

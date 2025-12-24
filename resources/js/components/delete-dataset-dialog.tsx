@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
@@ -10,7 +11,6 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
 import { destroy } from '@/routes/organisations/datasets';
 import { type Dataset, type Organisation } from '@/types';
 import { router } from '@inertiajs/react';
@@ -101,7 +101,7 @@ export function DeleteDatasetDialog({
             <div className="space-y-1">
               <Label
                 htmlFor="delete-files"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                className="text-sm leading-none font-medium peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
               >
                 Delete associated files
               </Label>
@@ -124,13 +124,13 @@ export function DeleteDatasetDialog({
             <div className="space-y-1">
               <Label
                 htmlFor="delete-conversations"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                className="text-sm leading-none font-medium peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
               >
                 Delete associated conversations
               </Label>
               <p className="text-xs text-muted-foreground">
-                This will permanently delete{' '}
-                {dataset.conversations_count || 0} conversation
+                This will permanently delete {dataset.conversations_count || 0}{' '}
+                conversation
                 {dataset.conversations_count !== 1 ? 's' : ''} and all their
                 messages.
               </p>
@@ -155,4 +155,3 @@ export function DeleteDatasetDialog({
     </Dialog>
   );
 }
-

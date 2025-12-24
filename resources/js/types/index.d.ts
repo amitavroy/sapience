@@ -59,6 +59,19 @@ export interface Conversation {
   updated_at?: string;
 }
 
+export interface Research {
+  id: number;
+  uuid: string;
+  query: string;
+  description: string | null;
+  report?: string | null;
+  status: string;
+  user: User;
+  organisation: Organisation;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface Message {
   content: string;
   role: 'user' | 'assistant';
