@@ -133,7 +133,7 @@ test('invalid file is marked as invalid and deleted from S3', function () {
     Storage::fake('s3');
     Config::set('filesystems.default', 's3');
     Config::set('filesystems.uploads_disk', 's3');
-    putenv('FILESYSTEM_UPLOADS_DISK=s3');
+    setUploadsDisk('s3');
 
     $user = User::factory()->create();
     $organisation = Organisation::factory()->create();

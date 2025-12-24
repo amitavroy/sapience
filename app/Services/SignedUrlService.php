@@ -49,7 +49,7 @@ class SignedUrlService
             $bucket = config("filesystems.disks.{$diskName}.bucket");
 
             if ($externalUrl && $bucket) {
-                return rtrim($externalUrl, '/').'/'.$bucket.'/'.ltrim($path, '/');
+                return rtrim($externalUrl, '/') . '/' . $bucket . '/' . ltrim($path, '/');
             }
         }
 

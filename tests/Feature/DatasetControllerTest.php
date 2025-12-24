@@ -25,11 +25,12 @@ test('user can view datasets index for their organisation', function () {
     );
 
     $response->assertSuccessful();
-    $response->assertInertia(fn ($page) => $page
-        ->component('organisations/datasets/index')
-        ->has('datasets', 2)
-        ->where('organisation.id', $organisation->id)
-        ->where('isAdmin', false)
+    $response->assertInertia(
+        fn($page) => $page
+            ->component('organisations/datasets/index')
+            ->has('datasets', 2)
+            ->where('organisation.id', $organisation->id)
+            ->where('isAdmin', false)
     );
 });
 
@@ -43,9 +44,10 @@ test('admin can view datasets index and sees create button', function () {
     );
 
     $response->assertSuccessful();
-    $response->assertInertia(fn ($page) => $page
-        ->component('organisations/datasets/index')
-        ->where('isAdmin', true)
+    $response->assertInertia(
+        fn($page) => $page
+            ->component('organisations/datasets/index')
+            ->where('isAdmin', true)
     );
 });
 
@@ -75,11 +77,12 @@ test('user can view a dataset they belong to', function () {
     );
 
     $response->assertSuccessful();
-    $response->assertInertia(fn ($page) => $page
-        ->component('organisations/datasets/show')
-        ->where('dataset.id', $dataset->id)
-        ->where('dataset.name', $dataset->name)
-        ->where('isAdmin', false)
+    $response->assertInertia(
+        fn($page) => $page
+            ->component('organisations/datasets/show')
+            ->where('dataset.id', $dataset->id)
+            ->where('dataset.name', $dataset->name)
+            ->where('isAdmin', false)
     );
 });
 
@@ -102,8 +105,9 @@ test('dataset show page displays file count', function () {
     );
 
     $response->assertSuccessful();
-    $response->assertInertia(fn ($page) => $page
-        ->where('dataset.files_count', 2)
+    $response->assertInertia(
+        fn($page) => $page
+            ->where('dataset.files_count', 2)
     );
 });
 
@@ -135,9 +139,10 @@ test('admin can access create dataset page', function () {
     );
 
     $response->assertSuccessful();
-    $response->assertInertia(fn ($page) => $page
-        ->component('organisations/datasets/create')
-        ->where('organisation.id', $organisation->id)
+    $response->assertInertia(
+        fn($page) => $page
+            ->component('organisations/datasets/create')
+            ->where('organisation.id', $organisation->id)
     );
 });
 
@@ -234,9 +239,10 @@ test('admin can access edit dataset page', function () {
     );
 
     $response->assertSuccessful();
-    $response->assertInertia(fn ($page) => $page
-        ->component('organisations/datasets/edit')
-        ->where('dataset.id', $dataset->id)
+    $response->assertInertia(
+        fn($page) => $page
+            ->component('organisations/datasets/edit')
+            ->where('dataset.id', $dataset->id)
     );
 });
 
@@ -416,9 +422,10 @@ test('datasets index shows file count', function () {
     );
 
     $response->assertSuccessful();
-    $response->assertInertia(fn ($page) => $page
-        ->has('datasets', 1)
-        ->where('datasets.0.files_count', 2)
+    $response->assertInertia(
+        fn($page) => $page
+            ->has('datasets', 1)
+            ->where('datasets.0.files_count', 2)
     );
 });
 
@@ -444,10 +451,11 @@ test('datasets index shows status correctly', function () {
     );
 
     $response->assertSuccessful();
-    $response->assertInertia(fn ($page) => $page
-        ->has('datasets', 2)
-        ->where('datasets.0.is_active', true)
-        ->where('datasets.1.is_active', false)
+    $response->assertInertia(
+        fn($page) => $page
+            ->has('datasets', 2)
+            ->where('datasets.0.is_active', true)
+            ->where('datasets.1.is_active', false)
     );
 });
 
@@ -531,7 +539,7 @@ test('dataset deletion always deletes Typesense collection', function () {
 test('dataset deletion with delete_files flag deletes exclusive files from S3', function () {
     Storage::fake('s3');
     Config::set('filesystems.uploads_disk', 's3');
-    putenv('FILESYSTEM_UPLOADS_DISK=s3');
+    setUploadsDisk('s3');
 
     $user = User::factory()->create();
     $organisation = Organisation::factory()->create();
@@ -572,7 +580,7 @@ test('dataset deletion with delete_files flag deletes exclusive files from S3', 
 test('dataset deletion without delete_files flag does not delete files', function () {
     Storage::fake('s3');
     Config::set('filesystems.uploads_disk', 's3');
-    putenv('FILESYSTEM_UPLOADS_DISK=s3');
+    setUploadsDisk('s3');
 
     $user = User::factory()->create();
     $organisation = Organisation::factory()->create();
@@ -615,7 +623,7 @@ test('dataset deletion without delete_files flag does not delete files', functio
 test('dataset deletion with delete_files flag does not delete files belonging to other datasets', function () {
     Storage::fake('s3');
     Config::set('filesystems.uploads_disk', 's3');
-    putenv('FILESYSTEM_UPLOADS_DISK=s3');
+    setUploadsDisk('s3');
 
     $user = User::factory()->create();
     $organisation = Organisation::factory()->create();

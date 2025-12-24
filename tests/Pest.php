@@ -41,7 +41,13 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * Set the uploads disk environment variable for tests.
+ * This ensures env() calls in the application code read the correct value.
+ */
+function setUploadsDisk(string $disk = 's3'): void
 {
-    // ..
+    $_ENV['FILESYSTEM_UPLOADS_DISK'] = $disk;
+    $_SERVER['FILESYSTEM_UPLOADS_DISK'] = $disk;
+    putenv("FILESYSTEM_UPLOADS_DISK={$disk}");
 }
