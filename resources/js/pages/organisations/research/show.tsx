@@ -10,10 +10,11 @@ import { dashboard } from '@/routes/organisations';
 import {
   edit as editResearch,
   index as researchIndex,
+  start as startResearch,
 } from '@/routes/organisations/research';
 import { type BreadcrumbItem, type Organisation, type Research } from '@/types';
-import { Head, Link } from '@inertiajs/react';
-import { Edit } from 'lucide-react';
+import { Form, Head, Link } from '@inertiajs/react';
+import { Edit, Play } from 'lucide-react';
 import { useState } from 'react';
 
 interface ShowProps {
@@ -80,6 +81,24 @@ export default function ResearchShow({
           </div>
           {isOwner && (
             <div className="flex gap-2">
+              {research.status === 'pending' && (
+                <Form
+                  action={
+                    startResearch({
+                      organisation: organisation.uuid,
+                      research: research.uuid,
+                    }).url
+                  }
+                  method="post"
+                >
+                  {({ processing }) => (
+                    <Button type="submit" disabled={processing}>
+                      <Play className="mr-2 size-4" />
+                      {processing ? 'Starting...' : 'Start Research'}
+                    </Button>
+                  )}
+                </Form>
+              )}
               <Link
                 href={
                   editResearch({

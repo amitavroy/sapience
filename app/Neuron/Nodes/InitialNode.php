@@ -19,14 +19,12 @@ class InitialNode extends Node
     {
         logger('Starting the workflow');
 
-        $research = Research::create([
-            'user_id' => $state->get('user_id'),
-            'organisation_id' => $state->get('organisation_id'),
-            'query' => $state->get('topic'),
-            'status' => 'pending',
-        ]);
+        $researchId = $state->get('research_id');
+        $research = Research::findOrFail($researchId);
 
-        $state->set('research_id', $research->id);
+        $research->update([
+            'status' => 'processing',
+        ]);
 
         return new SearchEvent;
     }

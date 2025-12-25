@@ -5,6 +5,7 @@ use App\Http\Controllers\DatasetController;
 use App\Http\Controllers\FileController;
 use App\Http\Controllers\OrganisationController;
 use App\Http\Controllers\ResearchController;
+use App\Http\Controllers\StartResearchController;
 use App\Http\Middleware\EnsureUserHasOrganisation;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -69,6 +70,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 'update' => 'research.update',
                 'destroy' => 'research.destroy',
             ]);
+
+        Route::post('{organisation}/research/{research}/start', StartResearchController::class)
+            ->name('research.start');
     });
 
     Route::prefix('api/v1')->name('api.v1.')->group(function () {
