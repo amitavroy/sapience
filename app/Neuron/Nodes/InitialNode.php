@@ -20,8 +20,8 @@ class InitialNode extends Node
         logger('Starting the workflow');
 
         $research = Research::create([
-            'user_id' => 1, // TODO: Get the user id from the request
-            'organisation_id' => 1, // TODO: Get the organisation id from the request
+            'user_id' => $state->get('user_id'),
+            'organisation_id' => $state->get('organisation_id'),
             'query' => $state->get('topic'),
             'status' => 'pending',
         ]);

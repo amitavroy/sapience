@@ -94,7 +94,7 @@ class ResearchController extends Controller
             abort(404);
         }
 
-        $research->load(['user', 'organisation']);
+        $research->load(['user', 'organisation', 'researchLinks']);
 
         $isOwner = $research->user_id === $user->id;
 

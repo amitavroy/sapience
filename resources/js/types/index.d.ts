@@ -59,6 +59,18 @@ export interface Conversation {
   updated_at?: string;
 }
 
+export interface ResearchLink {
+  id: number;
+  research_id: number;
+  user_id: number;
+  url: string;
+  content: unknown;
+  summary: string | null;
+  status: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface Research {
   id: number;
   uuid: string;
@@ -68,6 +80,7 @@ export interface Research {
   status: string;
   user: User;
   organisation: Organisation;
+  research_links?: ResearchLink[];
   created_at?: string;
   updated_at?: string;
 }
