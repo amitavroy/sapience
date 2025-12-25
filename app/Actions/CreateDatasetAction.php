@@ -29,7 +29,11 @@ class CreateDatasetAction
                 'is_active' => true,
             ]);
 
-            $this->typesenseService->createCollection($organisation->id, $dataset->id);
+            $this->typesenseService
+                ->createCollection(
+                    organisationId: $organisation->id,
+                    datasetId: $dataset->id
+                );
 
             return $dataset;
         });
