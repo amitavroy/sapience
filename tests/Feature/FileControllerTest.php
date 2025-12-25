@@ -186,7 +186,7 @@ test('organisation member can list files with pagination', function () {
     $dataset->files()->attach($files->pluck('id'));
 
     $response = $this->actingAs($user)->getJson(
-        route('organisations.datasets.files.index', [$organisation, $dataset]) . '?page=1&per_page=10'
+        route('organisations.datasets.files.index', [$organisation, $dataset]).'?page=1&per_page=10'
     );
 
     $response->assertSuccessful();
@@ -229,7 +229,7 @@ test('organisation member can search files by filename', function () {
     $dataset->files()->attach([$file1->id, $file2->id]);
 
     $response = $this->actingAs($user)->getJson(
-        route('organisations.datasets.files.index', [$organisation, $dataset]) . '?search=test-document'
+        route('organisations.datasets.files.index', [$organisation, $dataset]).'?search=test-document'
     );
 
     $response->assertSuccessful();

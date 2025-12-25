@@ -26,7 +26,7 @@ test('user can view datasets index for their organisation', function () {
 
     $response->assertSuccessful();
     $response->assertInertia(
-        fn($page) => $page
+        fn ($page) => $page
             ->component('organisations/datasets/index')
             ->has('datasets', 2)
             ->where('organisation.id', $organisation->id)
@@ -45,7 +45,7 @@ test('admin can view datasets index and sees create button', function () {
 
     $response->assertSuccessful();
     $response->assertInertia(
-        fn($page) => $page
+        fn ($page) => $page
             ->component('organisations/datasets/index')
             ->where('isAdmin', true)
     );
@@ -78,7 +78,7 @@ test('user can view a dataset they belong to', function () {
 
     $response->assertSuccessful();
     $response->assertInertia(
-        fn($page) => $page
+        fn ($page) => $page
             ->component('organisations/datasets/show')
             ->where('dataset.id', $dataset->id)
             ->where('dataset.name', $dataset->name)
@@ -106,7 +106,7 @@ test('dataset show page displays file count', function () {
 
     $response->assertSuccessful();
     $response->assertInertia(
-        fn($page) => $page
+        fn ($page) => $page
             ->where('dataset.files_count', 2)
     );
 });
@@ -140,7 +140,7 @@ test('admin can access create dataset page', function () {
 
     $response->assertSuccessful();
     $response->assertInertia(
-        fn($page) => $page
+        fn ($page) => $page
             ->component('organisations/datasets/create')
             ->where('organisation.id', $organisation->id)
     );
@@ -240,7 +240,7 @@ test('admin can access edit dataset page', function () {
 
     $response->assertSuccessful();
     $response->assertInertia(
-        fn($page) => $page
+        fn ($page) => $page
             ->component('organisations/datasets/edit')
             ->where('dataset.id', $dataset->id)
     );
@@ -423,7 +423,7 @@ test('datasets index shows file count', function () {
 
     $response->assertSuccessful();
     $response->assertInertia(
-        fn($page) => $page
+        fn ($page) => $page
             ->has('datasets', 1)
             ->where('datasets.0.files_count', 2)
     );
@@ -452,7 +452,7 @@ test('datasets index shows status correctly', function () {
 
     $response->assertSuccessful();
     $response->assertInertia(
-        fn($page) => $page
+        fn ($page) => $page
             ->has('datasets', 2)
             ->where('datasets.0.is_active', true)
             ->where('datasets.1.is_active', false)

@@ -1,3 +1,4 @@
+import { ResearchStatusBadge } from '@/components/research-status-badge';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -10,7 +11,6 @@ import {
 } from '@/components/ui/dialog';
 import { Spinner } from '@/components/ui/spinner';
 import { formatRelativeTime } from '@/lib/utils';
-import { ResearchStatusBadge } from '@/components/research-status-badge';
 import {
   destroy as destroyResearch,
   edit as editResearch,

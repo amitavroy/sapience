@@ -50,6 +50,7 @@ return [
 
     'search' => [
         'host' => env('SEARCH_HOST', 'http://searxng:8888'),
+        'results' => env('SEARCH_RESULTS', 5),
     ],
 
 ];

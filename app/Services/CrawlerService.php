@@ -161,7 +161,7 @@ class CrawlerService
         $html = preg_replace('/<!--.*?-->/s', '', $html);
 
         $dom = new DOMDocument;
-        @$dom->loadHTML('<?xml encoding="UTF-8">' . $html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+        @$dom->loadHTML('<?xml encoding="UTF-8">'.$html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
 
         $xpath = new DOMXPath($dom);
 
