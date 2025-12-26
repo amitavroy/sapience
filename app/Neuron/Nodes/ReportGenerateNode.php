@@ -31,7 +31,15 @@ class ReportGenerateNode extends Node
 
         $completeSummary = implode("\n\n==========================\n\n", $summaryContent->toArray());
 
-        $report = ReportAgent::make()->chat(new UserMessage($completeSummary));
+        // Prepend instructions if they exist
+        $prompt = $completeSummary;
+        if (! empty($research->instructions)) {
+            $prompt = "Research Instructions:\n\n{$research->instructions}\n\n" .
+                "==========================\n\n" .
+                "Research Summaries:\n\n{$completeSummary}";
+        }
+
+        $report = ReportAgent::make()->chat(new UserMessage($prompt));
         $research->report = $report->getContent();
         $research->save();
 
