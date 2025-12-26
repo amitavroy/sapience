@@ -59,9 +59,9 @@ export default function ResearchShow({
               <h1 className="text-2xl font-bold">{research.query}</h1>
               <ResearchStatusBadge status={research.status} />
             </div>
-            {research.description && (
+            {research.instructions && (
               <p className="mb-2 text-muted-foreground">
-                {research.description}
+                {research.instructions}
               </p>
             )}
             <div className="flex items-center gap-4 text-sm text-muted-foreground">

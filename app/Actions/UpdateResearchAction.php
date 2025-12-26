@@ -14,7 +14,7 @@ class UpdateResearchAction
     {
         $research->update([
             'query' => Arr::get($validated, 'query'),
-            'description' => Arr::get($validated, 'description'),
+            'instructions' => Arr::get($validated, 'instructions'),
         ]);
 
         return $research->fresh();

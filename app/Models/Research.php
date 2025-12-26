@@ -30,7 +30,7 @@ class Research extends Model
         'user_id',
         'organisation_id',
         'query',
-        'description',
+        'instructions',
         'report',
         'status',
     ];

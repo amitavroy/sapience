@@ -31,7 +31,7 @@ class CreateResearchRequest extends FormRequest
     {
         return [
             'query' => ['required', 'string'],
-            'description' => ['nullable', 'string'],
+            'instructions' => ['nullable', 'string'],
         ];
     }
 }

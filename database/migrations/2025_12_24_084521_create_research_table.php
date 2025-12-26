@@ -19,7 +19,7 @@ return new class extends Migration
             $table->foreignIdFor(User::class)->index();
             $table->foreignIdFor(Organisation::class)->index();
             $table->text('query');
-            $table->text('description')->nullable();
+            $table->text('instructions')->nullable();
             $table->longText('report')->nullable();
             $table->string('status')->default('pending');
             $table->timestamps();

@@ -48,16 +48,16 @@ export default function ResearchForm({
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="description">Description</Label>
+              <Label htmlFor="instructions">Instructions</Label>
               <textarea
-                id="description"
-                name="description"
+                id="instructions"
+                name="instructions"
                 rows={4}
-                defaultValue={research?.description || ''}
+                defaultValue={research?.instructions || ''}
                 className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                placeholder="Enter research description (optional)"
+                placeholder="Enter research instructions (optional)"
               />
-              <InputError message={errors.description} />
+              <InputError message={errors.instructions} />
             </div>
 
             <Button type="submit" className="mt-2 w-full" disabled={processing}>

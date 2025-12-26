@@ -22,7 +22,7 @@ class ResearchFactory extends Factory
             'user_id' => User::factory(),
             'organisation_id' => Organisation::factory(),
             'query' => fake()->sentence(),
-            'description' => fake()->optional()->paragraph(),
+            'instructions' => fake()->optional()->paragraph(),
             'report' => fake()->optional()->text(2000),
             'status' => 'pending',
         ];

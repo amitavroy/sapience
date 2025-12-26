@@ -41,7 +41,7 @@ export default function ResearchIndex({
     const searchLower = search.toLowerCase();
     return (
       research.query.toLowerCase().includes(searchLower) ||
-      research.description?.toLowerCase().includes(searchLower)
+      research.instructions?.toLowerCase().includes(searchLower)
     );
   });
 

@@ -82,9 +82,9 @@ export function ResearchCard({
             </h3>
             <ResearchStatusBadge status={research.status} className="text-xs" />
           </div>
-          {research.description && (
+          {research.instructions && (
             <div className="mb-1 text-sm text-muted-foreground">
-              {research.description}
+              {research.instructions}
             </div>
           )}
           <div className="flex items-center gap-4 text-sm text-muted-foreground">

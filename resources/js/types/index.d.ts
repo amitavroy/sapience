@@ -75,7 +75,7 @@ export interface Research {
   id: number;
   uuid: string;
   query: string;
-  description: string | null;
+  instructions: string | null;
   report?: string | null;
   status: string;
   user: User;

@@ -16,7 +16,7 @@ class CreateResearchAction
     {
         return Research::create([
             'query' => Arr::get($validated, 'query'),
-            'description' => Arr::get($validated, 'description'),
+            'instructions' => Arr::get($validated, 'instructions'),
             'organisation_id' => $organisation->id,
             'user_id' => $user->id,
             'status' => 'pending',
