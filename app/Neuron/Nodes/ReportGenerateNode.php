@@ -34,8 +34,8 @@ class ReportGenerateNode extends Node
         // Prepend instructions if they exist
         $prompt = $completeSummary;
         if (! empty($research->instructions)) {
-            $prompt = "Research Instructions:\n\n{$research->instructions}\n\n" .
-                "==========================\n\n" .
+            $prompt = "Research Instructions:\n\n{$research->instructions}\n\n".
+                "==========================\n\n".
                 "Research Summaries:\n\n{$completeSummary}";
         }
 

@@ -31,7 +31,7 @@ services:
     depends_on:
       - mysql
       - redis
-    command: php artisan queue:listen
+    command: php artisan queue:listen --timeout=3600
     restart: unless-stopped
 
   mysql:
