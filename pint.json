@@ -1,0 +1,15 @@
+{
+    "exclude": [
+        "vendor",
+        "node_modules",
+        "public/storage",
+        "public/uploads",
+        "public/media",
+        "public/images",
+        "public/videos",
+        "public/audio",
+        "public/documents",
+        "public/other",
+        "docker"
+    ]
+}
