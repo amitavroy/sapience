@@ -18,31 +18,38 @@ class SearchNode extends Node
      */
     public function __invoke(SearchEvent $event, WorkflowState $state): SummariseEvent
     {
-        $topic = $state->get('topic');
+        $topics = $state->get('search_terms');
 
-        logger('Searching for the topic: '.$topic);
+        logger('Searching for the topics');
+
+        if (config('sapience.workflow_fake')) {
+            logger('Using fake workflow: SearchNode');
+
+            return new SummariseEvent;
+        }
 
         $searchService = app(SearchService::class);
-        $results = collect($searchService->search($topic)['results']);
+        collect($topics)->each(function ($topic) use ($searchService, $state) {
+            $results = collect($searchService->search($topic)['results'])->take(10);
 
-        $resultState = collect();
-        $results->each(function ($result) use ($resultState, $state): void {
-            $resultState->add([
-                'title' => $result['title'],
-                'url' => $result['url'],
-                'content' => $result['content'],
-            ]);
+            $resultState = collect();
+            $results->each(function ($result) use ($resultState, $state): void {
+                $resultState->add([
+                    'title' => $result['title'],
+                    'url' => $result['url'],
+                    'content' => $result['content'],
+                ]);
 
-            ResearchLink::create([
-                'research_id' => $state->get('research_id'),
-                'user_id' => 1,
-                'url' => $result['url'],
-                'content' => $result['content'],
-                'status' => 'pending',
-            ]);
+                ResearchLink::create([
+                    'research_id' => $state->get('research_id'),
+                    'user_id' => 1,
+                    'url' => $result['url'],
+                    'content' => $result['content'],
+                    'status' => 'pending',
+                ]);
+            });
         });
 
-        $state->set('results', $resultState->toArray());
         logger('Results added to the state');
 
         return new SummariseEvent;

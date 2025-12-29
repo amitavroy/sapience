@@ -20,6 +20,13 @@ class ReportGenerateNode extends Node
     public function __invoke(ReportGenerateEvent $event, WorkflowState $state): StopEvent
     {
         logger('Generating the report');
+
+        if (config('sapience.workflow_fake')) {
+            logger('Using fake workflow: ReportGenerateNode');
+
+            return new StopEvent;
+        }
+
         $researchId = $state->get('research_id');
         $research = Research::find($researchId);
         $researchLinks = $research->researchLinks()->get();

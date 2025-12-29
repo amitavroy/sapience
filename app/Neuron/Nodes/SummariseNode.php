@@ -22,6 +22,12 @@ class SummariseNode extends Node
     {
         logger('Summarising the content');
 
+        if (config('sapience.workflow_fake')) {
+            logger('Using fake workflow: SummariseNode');
+
+            return new ReportGenerateEvent;
+        }
+
         $researchId = $state->get('research_id');
         $research = Research::find($researchId);
 

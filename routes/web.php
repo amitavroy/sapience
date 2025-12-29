@@ -7,11 +7,9 @@ use App\Http\Controllers\OrganisationController;
 use App\Http\Controllers\ResearchController;
 use App\Http\Controllers\StartResearchController;
 use App\Http\Middleware\EnsureUserHasOrganisation;
-use App\Neuron\Agent\SearchTermAgent;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
-use NeuronAI\Chat\Messages\UserMessage;
 
 Route::get('/', function () {
     return Inertia::render('welcome', [
@@ -83,12 +81,3 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 require __DIR__.'/settings.php';
-
-Route::get('test', function () {
-    $searchTermAgent = SearchTermAgent::make()->withUserQuery('yezdi adventure 2025');
-    $response = $searchTermAgent->chat(new UserMessage('yezdi adventure 2025 review'));
-    $content = $response->getContent();
-    $result = json_decode($content, true);
-
-    return response()->json($result);
-});

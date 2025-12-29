@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Neuron;
 
+use App\Neuron\Nodes\GenerateSearchTermsNode;
 use App\Neuron\Nodes\InitialNode;
 use App\Neuron\Nodes\ReportGenerateNode;
 use App\Neuron\Nodes\SearchNode;
@@ -16,6 +17,7 @@ class ResearchWorkflow extends Workflow
     {
         return [
             new InitialNode,
+            new GenerateSearchTermsNode,
             new SearchNode,
             new SummariseNode,
             new ReportGenerateNode,

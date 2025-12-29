@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Neuron\Nodes;
 
 use App\Models\Research;
-use App\Neuron\Events\SearchEvent;
+use App\Neuron\Events\GenerateSearchKeywordsEvent;
 use NeuronAI\Workflow\Node;
 use NeuronAI\Workflow\StartEvent;
 use NeuronAI\Workflow\WorkflowState;
@@ -15,9 +15,15 @@ class InitialNode extends Node
     /**
      * Implement the Node's logic
      */
-    public function __invoke(StartEvent $event, WorkflowState $state): SearchEvent
+    public function __invoke(StartEvent $event, WorkflowState $state): GenerateSearchKeywordsEvent
     {
         logger('Starting the workflow');
+
+        if ((config('sapience.workflow_fake'))) {
+            logger('Using fake workflow: InitialNode');
+
+            return new GenerateSearchKeywordsEvent;
+        }
 
         $researchId = $state->get('research_id');
         $research = Research::findOrFail($researchId);
@@ -26,6 +32,6 @@ class InitialNode extends Node
             'status' => 'processing',
         ]);
 
-        return new SearchEvent;
+        return new GenerateSearchKeywordsEvent;
     }
 }
