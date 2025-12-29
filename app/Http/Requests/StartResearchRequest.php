@@ -16,7 +16,7 @@ class StartResearchRequest extends FormRequest
         $organisation = $this->route('organisation');
         $research = $this->route('research');
 
-        if (! $organisation instanceof Organisation || ! $research instanceof Research) {
+        if (!$organisation instanceof Organisation || !$research instanceof Research) {
             return false;
         }
 
@@ -26,12 +26,12 @@ class StartResearchRequest extends FormRequest
         }
 
         // Ensure user is a member of the organisation
-        if (! $this->user()->organisations()->where('organisations.id', $organisation->id)->exists()) {
+        if (!$this->user()->organisations()->where('organisations.id', $organisation->id)->exists()) {
             return false;
         }
 
-        // Research status must be pending
-        return $research->status === 'pending';
+        // Research status must be pending or awaiting_feedback (for resume)
+        return in_array($research->status, ['pending', 'awaiting_feedback']);
     }
 
     /**
@@ -42,7 +42,9 @@ class StartResearchRequest extends FormRequest
     public function rules(): array
     {
         return [
-            //
+            'additional_context' => ['nullable', 'string', 'max:5000'],
+            'refined_search_terms' => ['nullable', 'array'],
+            'refined_search_terms.*' => ['string', 'max:255'],
         ];
     }
 }

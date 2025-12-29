@@ -16,6 +16,8 @@ import { type BreadcrumbItem, type Organisation, type Research } from '@/types';
 import { Form, Head, Link } from '@inertiajs/react';
 import { Edit, Play } from 'lucide-react';
 import { useState } from 'react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 interface ShowProps {
   organisation: Organisation;
@@ -29,6 +31,7 @@ export default function ResearchShow({
   isOwner,
 }: ShowProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [additionalContext, setAdditionalContext] = useState('');
 
   const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -122,7 +125,69 @@ export default function ResearchShow({
           )}
         </div>
 
-        {research.status === 'completed' && research.report ? (
+        {research.status === 'awaiting_feedback' && research.interruption_data ? (
+          <div className="rounded-xl border border-sidebar-border/70 p-6 dark:border-sidebar-border">
+            <div className="mb-6">
+              <h2 className="mb-2 text-xl font-semibold">Context Clarification Needed</h2>
+              <p className="text-muted-foreground">
+                {research.interruption_data.question || 'Please review the generated search terms and provide any additional context or clarification to improve the search results.'}
+              </p>
+            </div>
+
+            <div className="mb-6">
+              <h3 className="mb-3 text-lg font-medium">Generated Search Terms</h3>
+              <div className="flex flex-wrap gap-2">
+                {research.interruption_data.search_terms?.map((term: string, index: number) => (
+                  <span
+                    key={index}
+                    className="rounded-md bg-secondary px-3 py-1 text-sm"
+                  >
+                    {term}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {isOwner && (
+              <Form
+                action={
+                  startResearch({
+                    organisation: organisation.uuid,
+                    research: research.uuid,
+                  }).url
+                }
+                method="post"
+              >
+                {({ processing }) => (
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="additional_context">
+                        Additional Context (Optional)
+                      </Label>
+                      <Input
+                        id="additional_context"
+                        name="additional_context"
+                        type="text"
+                        value={additionalContext}
+                        onChange={(e) => setAdditionalContext(e.target.value)}
+                        placeholder="Provide any additional context or clarification..."
+                        className="mt-2"
+                        disabled={processing}
+                      />
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Add any additional information that might help improve the search results.
+                      </p>
+                    </div>
+
+                    <Button type="submit" disabled={processing}>
+                      {processing ? 'Resuming...' : 'Resume Research'}
+                    </Button>
+                  </div>
+                )}
+              </Form>
+            )}
+          </div>
+        ) : research.status === 'completed' && research.report ? (
           <div className="rounded-xl border border-sidebar-border/70 p-6 dark:border-sidebar-border">
             <Tabs defaultValue="report">
               <TabsList>

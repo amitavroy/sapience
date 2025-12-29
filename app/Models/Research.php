@@ -33,6 +33,8 @@ class Research extends Model
         'instructions',
         'report',
         'status',
+        'interruption_data',
+        'workflow_id',
     ];
 
     /**
@@ -44,6 +46,7 @@ class Research extends Model
     {
         return [
             'uuid' => 'string',
+            'interruption_data' => 'array',
         ];
     }
 

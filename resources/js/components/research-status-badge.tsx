@@ -17,6 +17,8 @@ export function ResearchStatusBadge({
         return 'secondary';
       case 'processing':
         return 'default';
+      case 'awaiting_feedback':
+        return 'default';
       case 'failed':
         return 'destructive';
       default:
@@ -24,9 +26,18 @@ export function ResearchStatusBadge({
     }
   };
 
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'awaiting_feedback':
+        return 'Awaiting Feedback';
+      default:
+        return status;
+    }
+  };
+
   return (
     <Badge variant={getStatusBadgeVariant(status)} className={className}>
-      {status}
+      {getStatusLabel(status)}
     </Badge>
   );
 }
