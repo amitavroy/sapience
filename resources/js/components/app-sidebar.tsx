@@ -9,6 +9,7 @@ import {
   SidebarHeader,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import { index as auditsIndex } from '@/routes/organisations/audits/index';
 import { index as conversationsIndex } from '@/routes/organisations/conversations';
 import { index } from '@/routes/organisations/datasets';
 import { index as researchIndex } from '@/routes/organisations/research/index';
@@ -16,6 +17,7 @@ import { type NavItem, type SharedData } from '@/types';
 import { usePage } from '@inertiajs/react';
 import {
   BookOpen,
+  ClipboardCheck,
   Database,
   Folder,
   LayoutGrid,
@@ -48,6 +50,11 @@ export function AppSidebar() {
 
   if (currentOrganisation) {
     mainNavItems.push(
+      {
+        title: 'Audits',
+        href: auditsIndex(currentOrganisation.uuid),
+        icon: ClipboardCheck,
+      },
       {
         title: 'Datasets',
         href: index(currentOrganisation.uuid),

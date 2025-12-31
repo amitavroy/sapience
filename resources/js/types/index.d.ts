@@ -85,6 +85,19 @@ export interface Research {
   updated_at?: string;
 }
 
+export interface Audit {
+  id: number;
+  user_id: number;
+  organisation_id: number;
+  website_url: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  report: string | null;
+  created_at?: string;
+  updated_at?: string;
+  user?: User;
+  organisation?: Organisation;
+}
+
 export interface Message {
   content: string;
   role: 'user' | 'assistant';

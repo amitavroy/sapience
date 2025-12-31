@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AuditController;
 use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\DatasetController;
 use App\Http\Controllers\FileController;
@@ -73,6 +74,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::post('{organisation}/research/{research}/start', StartResearchController::class)
             ->name('research.start');
+
+        Route::resource('{organisation}/audits', AuditController::class)
+            ->names([
+                'index' => 'audits.index',
+                'create' => 'audits.create',
+                'store' => 'audits.store',
+            ]);
     });
 
     Route::prefix('api/v1')->name('api.v1.')->group(function () {
