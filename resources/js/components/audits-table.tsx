@@ -1,12 +1,17 @@
 import { Badge } from '@/components/ui/badge';
-import { type Audit, type PaginatedData } from '@/types';
+import { show as showAudit } from '@/routes/organisations/audits/index';
+import { type Audit, type Organisation, type PaginatedData } from '@/types';
 import { Link } from '@inertiajs/react';
 
 interface AuditsTableProps {
   audits: PaginatedData<Audit>;
+  organisation: Organisation;
 }
 
-export default function AuditsTable({ audits }: AuditsTableProps) {
+export default function AuditsTable({
+  audits,
+  organisation,
+}: AuditsTableProps) {
   const formatDate = (dateString?: string): string => {
     if (!dateString) {
       return 'N/A';
@@ -74,14 +79,15 @@ export default function AuditsTable({ audits }: AuditsTableProps) {
                   >
                     <td className="px-4 py-3 text-sm">
                       <div className="font-medium">
-                        <a
-                          href={audit.website_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <Link
+                          href={showAudit.url({
+                            organisation: organisation.uuid,
+                            audit: { id: audit.id },
+                          })}
                           className="text-primary hover:underline"
                         >
                           {audit.website_url}
-                        </a>
+                        </Link>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-sm text-muted-foreground">

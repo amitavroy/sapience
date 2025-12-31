@@ -3,9 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Audit\CreateAuditAction;
+use App\Actions\Audit\DeleteAuditAction;
 use App\Http\Requests\CreateAuditRequest;
+use App\Http\Requests\DeleteAuditRequest;
 use App\Models\Audit;
 use App\Models\Organisation;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -82,7 +85,56 @@ class AuditController extends Controller
         );
 
         return redirect()
-            ->route('organisations.audits.index', [$organisation])
+            ->route('organisations.audits.show', [$organisation, $audit])
             ->with('success', 'Audit created successfully.');
+    }
+
+    /**
+     * Display the specified resource.
+     */
+    public function show(Request $request, Organisation $organisation, Audit $audit): Response
+    {
+        $user = $request->user();
+
+        // Ensure user belongs to this organisation
+        if (! $user->organisations()->where('organisations.id', $organisation->id)->exists()) {
+            abort(403);
+        }
+
+        // Ensure audit belongs to this organisation
+        if ($audit->organisation_id !== $organisation->id) {
+            abort(404);
+        }
+
+        $audit->load(['user', 'organisation']);
+
+        $isOwner = $audit->user_id === $user->id;
+
+        return Inertia::render('organisations/audits/show', [
+            'organisation' => $organisation,
+            'audit' => $audit,
+            'isOwner' => $isOwner,
+        ]);
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     */
+    public function destroy(
+        DeleteAuditRequest $request,
+        Organisation $organisation,
+        Audit $audit,
+        DeleteAuditAction $action
+    ): RedirectResponse {
+        // Ensure audit belongs to the organisation
+        if ($audit->organisation_id !== $organisation->id) {
+            abort(404);
+        }
+
+        $action->execute($audit);
+
+        return redirect()
+            ->route('organisations.audits.index', [$organisation])
+            ->with('success', 'Audit deleted successfully.');
     }
 }

@@ -51,7 +51,7 @@ export default function AuditsIndex({ organisation, audits }: IndexProps) {
           </Link>
         </div>
 
-        <AuditsTable audits={audits} />
+        <AuditsTable audits={audits} organisation={organisation} />
       </div>
     </AppLayout>
   );

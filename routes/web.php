@@ -80,6 +80,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 'index' => 'audits.index',
                 'create' => 'audits.create',
                 'store' => 'audits.store',
+                'show' => 'audits.show',
+                'destroy' => 'audits.destroy',
             ]);
     });
 
