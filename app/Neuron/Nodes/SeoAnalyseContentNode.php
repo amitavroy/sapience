@@ -6,9 +6,9 @@ namespace App\Neuron\Nodes;
 
 use App\Models\Audit;
 use App\Neuron\Agent\ContentAnalysisSummariserAgent;
+use App\Neuron\Events\GenerateSearchTermsFromSummaryEvent;
 use App\Neuron\Events\SeoAnalyseContentEvent;
 use NeuronAI\Workflow\Node;
-use NeuronAI\Workflow\StopEvent;
 use NeuronAI\Workflow\WorkflowState;
 
 class SeoAnalyseContentNode extends Node
@@ -16,7 +16,7 @@ class SeoAnalyseContentNode extends Node
     /**
      * Implement the Node's logic
      */
-    public function __invoke(SeoAnalyseContentEvent $event, WorkflowState $state): StopEvent
+    public function __invoke(SeoAnalyseContentEvent $event, WorkflowState $state): GenerateSearchTermsFromSummaryEvent
     {
         logger('Analysing the content');
 
@@ -36,6 +36,6 @@ class SeoAnalyseContentNode extends Node
         $audit->status = 'summarised';
         $audit->save();
 
-        return new StopEvent;
+        return new GenerateSearchTermsFromSummaryEvent;
     }
 }

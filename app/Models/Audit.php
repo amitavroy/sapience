@@ -6,6 +6,7 @@ use App\Enums\AuditStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Audit extends Model
 {
@@ -24,6 +25,7 @@ class Audit extends Model
         'status',
         'analysis',
         'report',
+        'search_terms',
     ];
 
     /**
@@ -35,6 +37,7 @@ class Audit extends Model
     {
         return [
             'status' => AuditStatus::class,
+            'search_terms' => 'array',
         ];
     }
 
@@ -52,5 +55,13 @@ class Audit extends Model
     public function organisation(): BelongsTo
     {
         return $this->belongsTo(Organisation::class);
+    }
+
+    /**
+     * Get the audit links for the audit.
+     */
+    public function auditLinks(): HasMany
+    {
+        return $this->hasMany(AuditLink::class);
     }
 }
