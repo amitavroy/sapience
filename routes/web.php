@@ -6,6 +6,7 @@ use App\Http\Controllers\DatasetController;
 use App\Http\Controllers\FileController;
 use App\Http\Controllers\OrganisationController;
 use App\Http\Controllers\ResearchController;
+use App\Http\Controllers\StartAuditController;
 use App\Http\Controllers\StartResearchController;
 use App\Http\Middleware\EnsureUserHasOrganisation;
 use Illuminate\Support\Facades\Route;
@@ -83,6 +84,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 'show' => 'audits.show',
                 'destroy' => 'audits.destroy',
             ]);
+
+        Route::post('{organisation}/audits/{audit}/start', StartAuditController::class)
+            ->name('audits.start');
     });
 
     Route::prefix('api/v1')->name('api.v1.')->group(function () {

@@ -90,7 +90,8 @@ export interface Audit {
   user_id: number;
   organisation_id: number;
   website_url: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  status: 'pending' | 'in_progress' | 'summarised' | 'completed' | 'failed';
+  analysis: string | null;
   report: string | null;
   created_at?: string;
   updated_at?: string;

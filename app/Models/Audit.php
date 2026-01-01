@@ -22,6 +22,7 @@ class Audit extends Model
         'organisation_id',
         'website_url',
         'status',
+        'analysis',
         'report',
     ];
 

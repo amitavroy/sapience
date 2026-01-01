@@ -19,6 +19,7 @@ return new class extends Migration
             $table->foreignIdFor(Organisation::class)->index();
             $table->string('website_url');
             $table->string('status')->default('pending');
+            $table->longText('analysis')->nullable();
             $table->longText('report')->nullable();
             $table->timestamps();
         });

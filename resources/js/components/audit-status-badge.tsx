@@ -1,13 +1,13 @@
 import { Badge } from '@/components/ui/badge';
 
 interface AuditStatusBadgeProps {
-  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  status: 'pending' | 'in_progress' | 'summarised' | 'completed' | 'failed';
   className?: string;
 }
 
 export function AuditStatusBadge({ status, className }: AuditStatusBadgeProps) {
   const getStatusBadgeVariant = (
-    status: 'pending' | 'in_progress' | 'completed' | 'failed',
+    status: 'pending' | 'in_progress' | 'summarised' | 'completed' | 'failed',
   ) => {
     switch (status) {
       case 'completed':
@@ -15,6 +15,8 @@ export function AuditStatusBadge({ status, className }: AuditStatusBadgeProps) {
       case 'pending':
         return 'secondary';
       case 'in_progress':
+        return 'default';
+      case 'summarised':
         return 'default';
       case 'failed':
         return 'destructive';
@@ -24,11 +26,13 @@ export function AuditStatusBadge({ status, className }: AuditStatusBadgeProps) {
   };
 
   const getStatusLabel = (
-    status: 'pending' | 'in_progress' | 'completed' | 'failed',
+    status: 'pending' | 'in_progress' | 'summarised' | 'completed' | 'failed',
   ) => {
     switch (status) {
       case 'in_progress':
         return 'In Progress';
+      case 'summarised':
+        return 'Summarised';
       case 'completed':
         return 'Completed';
       case 'failed':

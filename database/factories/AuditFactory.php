@@ -23,6 +23,7 @@ class AuditFactory extends Factory
             'organisation_id' => Organisation::factory(),
             'website_url' => fake()->url(),
             'status' => 'pending',
+            'analysis' => fake()->optional()->text(5000),
             'report' => fake()->optional()->text(5000),
         ];
     }

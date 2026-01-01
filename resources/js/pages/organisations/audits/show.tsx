@@ -1,14 +1,18 @@
 import { AuditStatusBadge } from '@/components/audit-status-badge';
 import { DeleteAuditDialog } from '@/components/delete-audit-dialog';
+import { MarkdownContent } from '@/components/markdown-content';
+import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { formatRelativeTime } from '@/lib/utils';
 import { dashboard } from '@/routes/organisations';
 import {
   index as auditsIndex,
   show as showAudit,
+  start as startAudit,
 } from '@/routes/organisations/audits/index';
 import { type Audit, type BreadcrumbItem, type Organisation } from '@/types';
-import { Head } from '@inertiajs/react';
+import { Form, Head } from '@inertiajs/react';
+import { Play } from 'lucide-react';
 import { useState } from 'react';
 
 interface ShowProps {
@@ -75,6 +79,24 @@ export default function AuditShow({ organisation, audit, isOwner }: ShowProps) {
           </div>
           {isOwner && (
             <div className="flex gap-2">
+              {audit.status === 'pending' && (
+                <Form
+                  action={
+                    startAudit({
+                      organisation: organisation.uuid,
+                      audit: { id: audit.id },
+                    }).url
+                  }
+                  method="post"
+                >
+                  {({ processing }) => (
+                    <Button type="submit" disabled={processing}>
+                      <Play className="mr-2 size-4" />
+                      {processing ? 'Starting...' : 'Start Research'}
+                    </Button>
+                  )}
+                </Form>
+              )}
               <DeleteAuditDialog
                 organisation={organisation}
                 audit={audit}
@@ -85,18 +107,21 @@ export default function AuditShow({ organisation, audit, isOwner }: ShowProps) {
           )}
         </div>
 
-        {audit.report && (
+        {audit.status === 'summarised' && audit.analysis && (
           <div className="rounded-xl border border-sidebar-border/70 p-6 dark:border-sidebar-border">
-            <h2 className="mb-4 text-lg font-semibold">Report</h2>
-            <div className="prose prose-sm dark:prose-invert max-w-none">
-              <pre className="font-sans text-sm break-words whitespace-pre-wrap">
-                {audit.report}
-              </pre>
-            </div>
+            <h2 className="mb-4 text-lg font-semibold">Analysis</h2>
+            <MarkdownContent content={audit.analysis} />
           </div>
         )}
 
-        {!audit.report && (
+        {audit.report && (
+          <div className="rounded-xl border border-sidebar-border/70 p-6 dark:border-sidebar-border">
+            <h2 className="mb-4 text-lg font-semibold">Report</h2>
+            <MarkdownContent content={audit.report} />
+          </div>
+        )}
+
+        {!audit.report && audit.status !== 'summarised' && (
           <div className="rounded-xl border border-sidebar-border/70 p-8 text-center dark:border-sidebar-border">
             <p className="text-muted-foreground">
               No report available yet. The audit is still {audit.status}.
