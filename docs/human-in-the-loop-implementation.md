@@ -130,7 +130,7 @@ Dispatches ResearchProcessJob
     ↓
 ResearchProcessJob creates workflow with:
   - WorkflowState (topic, user_id, etc.)
-  - FilePersistence (storage/app/workflows)
+  - DatabasePersistence (workflow_interrupts table)
   - Unique workflow_id (research_{id})
     ↓
 Workflow executes:
@@ -225,15 +225,15 @@ Workflow completes successfully
 
 #### Persistence
 
-The workflow uses `FilePersistence` to save its state:
-- **Location:** `storage/app/workflows/`
+The workflow uses `DatabasePersistence` to save its state:
+- **Storage:** `workflow_interrupts` database table
 - **Purpose:** Preserves workflow state during interruption
 - **Workflow ID Format:** `research_{research_id}`
 
 When a workflow is interrupted:
-1. Complete workflow state is saved to disk
+1. Complete workflow state is serialized and saved to the `workflow_interrupts` table
 2. Workflow ID is stored in Research model
-3. On resume, workflow is loaded using the same ID
+3. On resume, workflow is loaded from the database using the same ID
 
 #### Feedback Processing
 
