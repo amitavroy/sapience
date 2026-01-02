@@ -1,15 +1,74 @@
 import { MarkdownContent } from '@/components/markdown-content';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Spinner } from '@/components/ui/spinner';
 import { type ResearchLink } from '@/types';
-import { ExternalLink } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Clock, ExternalLink } from 'lucide-react';
+import { useState } from 'react';
 
 interface ResearchLinksListProps {
   links: ResearchLink[];
   showContainer?: boolean;
+  isProcessing?: boolean;
+}
+
+function ResearchLinkItem({ link }: { link: ResearchLink }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const getStatusIcon = () => {
+    if (link.status === 'completed') {
+      return <CheckCircle2 className="size-5 text-green-600 dark:text-green-500" />;
+    }
+    if (link.status === 'pending') {
+      return <Clock className="size-5 text-yellow-600 dark:text-yellow-500" />;
+    }
+    return null;
+  };
+
+  return (
+    <Collapsible
+      open={isOpen}
+      onOpenChange={setIsOpen}
+      className="rounded-lg border border-border"
+    >
+      <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 p-4 text-left hover:bg-accent/50 transition-colors">
+        <div className="flex flex-1 items-center gap-3 min-w-0">
+          {getStatusIcon()}
+          <a
+            href={link.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="flex items-center gap-2 text-blue-600 underline hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex-1 min-w-0"
+          >
+            <span className="line-clamp-1 truncate">{link.url}</span>
+            <ExternalLink className="size-4 shrink-0" />
+          </a>
+        </div>
+        <ChevronDown
+          className={`size-4 shrink-0 text-muted-foreground transition-transform ${
+            isOpen ? 'rotate-180' : ''
+          }`}
+        />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="px-4 pb-4">
+        {link.summary ? (
+          <div className="mt-2 pt-2 border-t">
+            <MarkdownContent content={link.summary} />
+          </div>
+        ) : link.status === 'pending' ? (
+          <div className="mt-2 pt-2 border-t text-sm text-muted-foreground">
+            Content is being processed...
+          </div>
+        ) : null}
+      </CollapsibleContent>
+    </Collapsible>
+  );
 }
 
 export function ResearchLinksList({
   links,
   showContainer = true,
+  isProcessing = false,
 }: ResearchLinksListProps) {
   if (!links || links.length === 0) {
     return null;
@@ -18,41 +77,16 @@ export function ResearchLinksList({
   const content = (
     <>
       {showContainer && (
-        <h2 className="mb-4 text-lg font-semibold">Research Links</h2>
+        <div className="mb-4 flex items-center gap-2">
+          <h2 className="text-lg font-semibold">Research Links</h2>
+          {isProcessing && (
+            <Spinner className="size-4 text-muted-foreground" />
+          )}
+        </div>
       )}
-      <div className="space-y-4">
+      <div className="space-y-2">
         {links.map((link) => (
-          <div key={link.id} className="rounded-lg border border-border p-4">
-            <div className="mb-2 flex items-start justify-between gap-2">
-              <a
-                href={link.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-blue-600 underline hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-              >
-                <span className="line-clamp-2">{link.url}</span>
-                <ExternalLink className="size-4 shrink-0" />
-              </a>
-            </div>
-            {link.summary && (
-              <div className="mt-2">
-                <MarkdownContent content={link.summary} />
-              </div>
-            )}
-            <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-              <span
-                className={`rounded px-2 py-1 ${
-                  link.status === 'completed'
-                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                    : link.status === 'failed'
-                      ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                      : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-                }`}
-              >
-                {link.status}
-              </span>
-            </div>
-          </div>
+          <ResearchLinkItem key={link.id} link={link} />
         ))}
       </div>
     </>
