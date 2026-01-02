@@ -1,16 +1,25 @@
 {
     "mcpServers": {
-      "laravel-boost": {
-        "command": "docker",
-        "args": [
-          "compose",
-          "exec",
-          "-T",
-          "php",
-          "php",
-          "artisan",
-          "boost:mcp"
-        ]
-      }
+        "laravel-boost": {
+            "command": "docker",
+            "args": [
+                "compose",
+                "exec",
+                "-T",
+                "php",
+                "php",
+                "artisan",
+                "boost:mcp"
+            ]
+        },
+        "herd": {
+            "command": "php",
+            "args": [
+                "/Applications/Herd.app/Contents/Resources/herd-mcp.phar"
+            ],
+            "env": {
+                "SITE_PATH": "/Users/amitavroy/code/personal/sapience"
+            }
+        }
     }
-  }
+}

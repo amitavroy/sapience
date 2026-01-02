@@ -20,6 +20,16 @@ class SearchService
                 'format' => 'json',
             ]);
 
+        if (! $response->successful()) {
+            logger('Search service request failed', [
+                'status' => $response->status(),
+                'body' => $response->body(),
+                'query' => $query,
+            ]);
+
+            return collect([]);
+        }
+
         return $response->collect();
     }
 }
