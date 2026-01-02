@@ -2,7 +2,7 @@ import { MarkdownContent } from '@/components/markdown-content';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Spinner } from '@/components/ui/spinner';
 import { type ResearchLink } from '@/types';
-import { CheckCircle2, ChevronDown, Clock, ExternalLink } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Clock, ExternalLink, XCircle } from 'lucide-react';
 import { useState } from 'react';
 
 interface ResearchLinksListProps {
@@ -20,6 +20,9 @@ function ResearchLinkItem({ link }: { link: ResearchLink }) {
     }
     if (link.status === 'pending') {
       return <Clock className="size-5 text-yellow-600 dark:text-yellow-500" />;
+    }
+    if (link.status === 'failed') {
+      return <XCircle className="size-5 text-red-600 dark:text-red-500" />;
     }
     return null;
   };
@@ -58,6 +61,10 @@ function ResearchLinkItem({ link }: { link: ResearchLink }) {
         ) : link.status === 'pending' ? (
           <div className="mt-2 pt-2 border-t text-sm text-muted-foreground">
             Content is being processed...
+          </div>
+        ) : link.status === 'failed' ? (
+          <div className="mt-2 pt-2 border-t text-sm text-red-600 dark:text-red-500">
+            Failed to process this link
           </div>
         ) : null}
       </CollapsibleContent>
