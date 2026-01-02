@@ -49,6 +49,7 @@ class SummariseNode extends Node
             $summary = $response->getContent();
 
             $researchLink->summary = $summary;
+            $researchLink->content = $content;
             $researchLink->status = 'completed';
             $researchLink->save();
         });
