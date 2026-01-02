@@ -76,7 +76,7 @@ class SeoAnalyzeAuditLinksNode extends Node
 
                 logger('Analysis completed', ['url' => $url]);
 
-                sleep(2); // add a wait of 2 seconds to not hit rate limits
+                sleep(5); // add a wait of 2 seconds to not hit rate limits
             } catch (\Exception $e) {
                 logger('Error analyzing link', [
                     'url' => $auditLink->url,

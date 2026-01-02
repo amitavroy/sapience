@@ -1,7 +1,9 @@
+import { AuditLinks } from '@/components/audit-links';
 import { AuditStatusBadge } from '@/components/audit-status-badge';
 import { DeleteAuditDialog } from '@/components/delete-audit-dialog';
 import { MarkdownContent } from '@/components/markdown-content';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/app-layout';
 import { formatRelativeTime } from '@/lib/utils';
 import { dashboard } from '@/routes/organisations';
@@ -107,26 +109,68 @@ export default function AuditShow({ organisation, audit, isOwner }: ShowProps) {
           )}
         </div>
 
-        {audit.status === 'summarised' && audit.analysis && (
+        {audit.status === 'completed' && audit.report ? (
           <div className="rounded-xl border border-sidebar-border/70 p-6 dark:border-sidebar-border">
-            <h2 className="mb-4 text-lg font-semibold">Analysis</h2>
-            <MarkdownContent content={audit.analysis} />
+            <Tabs defaultValue="analysis">
+              <TabsList>
+                <TabsTrigger value="analysis">Analysis</TabsTrigger>
+                <TabsTrigger value="report">Final Report</TabsTrigger>
+                <TabsTrigger value="links">Audit Links</TabsTrigger>
+              </TabsList>
+              <TabsContent value="analysis" className="mt-4">
+                {audit.analysis ? (
+                  <div className="overflow-x-auto">
+                    <MarkdownContent content={audit.analysis} />
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">
+                    No analysis available yet.
+                  </p>
+                )}
+              </TabsContent>
+              <TabsContent value="report" className="mt-4">
+                <div className="overflow-x-auto">
+                  <MarkdownContent content={audit.report} />
+                </div>
+              </TabsContent>
+              <TabsContent value="links" className="mt-4">
+                <AuditLinks auditLinks={audit.audit_links || []} />
+              </TabsContent>
+            </Tabs>
           </div>
-        )}
+        ) : (
+          <>
+            {audit.status === 'summarised' && audit.analysis && (
+              <div className="rounded-xl border border-sidebar-border/70 p-6 dark:border-sidebar-border">
+                <h2 className="mb-4 text-lg font-semibold">Analysis</h2>
+                <MarkdownContent content={audit.analysis} />
+              </div>
+            )}
 
-        {audit.report && (
-          <div className="rounded-xl border border-sidebar-border/70 p-6 dark:border-sidebar-border">
-            <h2 className="mb-4 text-lg font-semibold">Report</h2>
-            <MarkdownContent content={audit.report} />
-          </div>
-        )}
+            {audit.report && audit.status !== 'completed' && (
+              <div className="rounded-xl border border-sidebar-border/70 p-6 dark:border-sidebar-border">
+                <h2 className="mb-4 text-lg font-semibold">Report</h2>
+                <MarkdownContent content={audit.report} />
+              </div>
+            )}
 
-        {!audit.report && audit.status !== 'summarised' && (
-          <div className="rounded-xl border border-sidebar-border/70 p-8 text-center dark:border-sidebar-border">
-            <p className="text-muted-foreground">
-              No report available yet. The audit is still {audit.status}.
-            </p>
-          </div>
+            {!audit.report &&
+              audit.status !== 'summarised' &&
+              audit.status !== 'completed' && (
+                <div className="rounded-xl border border-sidebar-border/70 p-8 text-center dark:border-sidebar-border">
+                  <p className="text-muted-foreground">
+                    No report available yet. The audit is still {audit.status}.
+                  </p>
+                </div>
+              )}
+
+            {audit.audit_links && audit.audit_links.length > 0 && (
+              <div className="rounded-xl border border-sidebar-border/70 p-6 dark:border-sidebar-border">
+                <h2 className="mb-4 text-lg font-semibold">Audit Links</h2>
+                <AuditLinks auditLinks={audit.audit_links} />
+              </div>
+            )}
+          </>
         )}
       </div>
     </AppLayout>

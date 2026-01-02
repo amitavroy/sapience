@@ -85,6 +85,20 @@ export interface Research {
   updated_at?: string;
 }
 
+export interface AuditLink {
+  id: number;
+  audit_id: number;
+  user_id: number;
+  url: string;
+  title: string | null;
+  content: string | null;
+  summary: string | null;
+  search_term: string;
+  status: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface Audit {
   id: number;
   user_id: number;
@@ -97,6 +111,7 @@ export interface Audit {
   updated_at?: string;
   user?: User;
   organisation?: Organisation;
+  audit_links?: AuditLink[];
 }
 
 export interface Message {

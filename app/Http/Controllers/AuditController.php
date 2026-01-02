@@ -106,7 +106,7 @@ class AuditController extends Controller
             abort(404);
         }
 
-        $audit->load(['user', 'organisation']);
+        $audit->load(['user', 'organisation', 'auditLinks']);
 
         $isOwner = $audit->user_id === $user->id;
 
