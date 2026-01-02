@@ -19,8 +19,6 @@ class StartResearchController extends Controller
 
         if ($isResuming) {
             $this->prepareResume($request, $research);
-        } else {
-            $this->logStartingResearch($research);
         }
 
         try {
@@ -84,17 +82,6 @@ class StartResearchController extends Controller
         $research->update([
             'interruption_data' => $interruptionData,
             'status' => 'processing',
-        ]);
-    }
-
-    /**
-     * Log starting research
-     */
-    private function logStartingResearch(Research $research): void
-    {
-        logger('Starting research', [
-            'research_id' => $research->id,
-            'queue_connection' => config('queue.default'),
         ]);
     }
 
