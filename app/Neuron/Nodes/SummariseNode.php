@@ -31,17 +31,12 @@ class SummariseNode extends Node
         $researchId = $state->get('research_id');
         $research = Research::find($researchId);
 
-        $resultsLimit = config('services.search.results', 5);
-        $researchLinks = $resultsLimit === 0
-            ? $research->researchLinks
-            : $research->researchLinks->take($resultsLimit);
-
-        $researchLinks->each(function ($researchLink): void {
+        $research->researchLinks->each(function ($researchLink): void {
             $crawlService = app(CrawlerService::class);
             $result = $crawlService->execute($researchLink->url);
 
             // Skip if crawl was unsuccessful or content is empty
-            if (! $result->success || empty($result->content)) {
+            if (!$result->success || empty($result->content)) {
                 $researchLink->status = 'failed';
                 $researchLink->save();
 
