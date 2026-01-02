@@ -3,12 +3,12 @@
 namespace App\Jobs;
 
 use App\Models\Research;
+use App\Models\WorkflowInterrupt;
+use App\Neuron\Persistence\DatabasePersistence;
 use App\Neuron\ResearchWorkflow;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Support\Facades\File;
-use NeuronAI\Workflow\Persistence\FilePersistence;
-use NeuronAI\Workflow\WorkflowInterrupt;
+use NeuronAI\Workflow\WorkflowInterrupt as WorkflowInterruptException;
 use NeuronAI\Workflow\WorkflowState;
 
 class ResearchProcessJob implements ShouldQueue
@@ -44,7 +44,7 @@ class ResearchProcessJob implements ShouldQueue
             }
 
             $this->executeWorkflow($handler);
-        } catch (WorkflowInterrupt $interrupt) {
+        } catch (WorkflowInterruptException $interrupt) {
             $this->handleWorkflowInterrupt($interrupt);
         } catch (\Throwable $e) {
             $this->handleWorkflowError($e);
@@ -77,12 +77,9 @@ class ResearchProcessJob implements ShouldQueue
     /**
      * Create and configure persistence for workflow
      */
-    private function createPersistence(): FilePersistence
+    private function createPersistence(): DatabasePersistence
     {
-        $persistencePath = storage_path('app/workflows');
-        File::ensureDirectoryExists($persistencePath);
-
-        return new FilePersistence($persistencePath);
+        return new DatabasePersistence(WorkflowInterrupt::class);
     }
 
     /**
@@ -98,7 +95,7 @@ class ResearchProcessJob implements ShouldQueue
     /**
      * Resume an existing workflow with user feedback
      */
-    private function resumeWorkflow(Research $research, WorkflowState $state, FilePersistence $persistence, string $workflowId)
+    private function resumeWorkflow(Research $research, WorkflowState $state, DatabasePersistence $persistence, string $workflowId)
     {
         logger('Resuming existing workflow', [
             'research_id' => $this->researchId,
@@ -131,7 +128,7 @@ class ResearchProcessJob implements ShouldQueue
     /**
      * Start a new workflow
      */
-    private function startNewWorkflow(Research $research, WorkflowState $state, FilePersistence $persistence, string $workflowId)
+    private function startNewWorkflow(Research $research, WorkflowState $state, DatabasePersistence $persistence, string $workflowId)
     {
         logger('Creating new workflow', [
             'research_id' => $this->researchId,
@@ -140,7 +137,7 @@ class ResearchProcessJob implements ShouldQueue
 
         $workflow = new ResearchWorkflow($state, $persistence, $workflowId);
 
-        if (!$research->workflow_id) {
+        if (! $research->workflow_id) {
             $research->update(['workflow_id' => $workflowId]);
         }
 
@@ -166,7 +163,7 @@ class ResearchProcessJob implements ShouldQueue
     /**
      * Handle workflow interruption - store interruption data and update status
      */
-    private function handleWorkflowInterrupt(WorkflowInterrupt $interrupt): void
+    private function handleWorkflowInterrupt(WorkflowInterruptException $interrupt): void
     {
         logger('Workflow interrupted', [
             'research_id' => $this->researchId,
