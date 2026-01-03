@@ -27,6 +27,7 @@
         "laravel/pail": "^1.2.4",
         "laravel/pint": "^1.26",
         "laravel/sail": "^1.51",
+        "laravel/telescope": "^5.16",
         "mockery/mockery": "^1.6.12",
         "nunomaduro/collision": "^8.8.3",
         "nunomaduro/phpinsights": ">=2.13.3",

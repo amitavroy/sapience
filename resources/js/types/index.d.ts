@@ -77,7 +77,14 @@ export interface Research {
   query: string;
   instructions: string | null;
   report?: string | null;
-  status: string;
+  status: 'pending' | 'processing' | 'awaiting_feedback' | 'completed' | 'failed';
+  interruption_data?: {
+    topic: string;
+    search_terms: string[];
+    question: string;
+    generated_at: string;
+  } | null;
+  workflow_id?: string | null;
   user: User;
   organisation: Organisation;
   research_links?: ResearchLink[];
