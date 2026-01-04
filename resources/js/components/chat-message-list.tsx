@@ -1,3 +1,4 @@
+import { MarkdownContent } from '@/components/markdown-content';
 import { type Message } from '@/types';
 
 interface ChatMessageListProps {
@@ -26,9 +27,16 @@ export default function ChatMessageList({ messages }: ChatMessageListProps) {
                   : 'bg-muted text-muted-foreground'
               }`}
             >
-              <p className="break-words whitespace-pre-wrap">
-                {message.content}
-              </p>
+              {message.role === 'user' ? (
+                <p className="break-words whitespace-pre-wrap">
+                  {message.content}
+                </p>
+              ) : (
+                <MarkdownContent
+                  content={message.content}
+                  className="[&_*]:text-muted-foreground [&_a]:text-blue-600 [&_a]:underline [&_a]:dark:text-blue-400"
+                />
+              )}
             </div>
           </div>
         ))
