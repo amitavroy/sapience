@@ -11,9 +11,11 @@ FROM base AS development
 # Switch to root so we can do root things
 USER root
 
-# Install Poppler utilities
+# Install Poppler utilities and Node.js
 RUN apt-get update && \
     apt-get install -y --no-install-recommends poppler-utils && \
+    curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
+    apt-get install -y nodejs && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -32,6 +34,17 @@ RUN docker-php-serversideup-set-id www-data $USER_ID:$GROUP_ID && \
     # Update the file permissions for our NGINX service to match the new UID/GID
     docker-php-serversideup-set-file-permissions --owner $USER_ID:$GROUP_ID --service nginx
 
+WORKDIR /var/www/html
+
+# Copy our app files as www-data (33:33)
+COPY --chown=www-data:www-data . /var/www/html
+
+RUN composer install
+
+RUN npm install
+
+RUN chown -R www-data:www-data /var/www/html
+
 # Drop back to our unprivileged user
 USER www-data
 
@@ -47,11 +60,21 @@ USER root
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends poppler-utils && \
+    curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
+    apt-get install -y nodejs && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Drop back to our unprivileged user
-USER www-data
+WORKDIR /var/www/html
 
 # Copy our app files as www-data (33:33)
 COPY --chown=www-data:www-data . /var/www/html
+
+RUN composer install
+
+RUN npm install
+
+RUN chown -R www-data:www-data /var/www/html
+
+# Drop back to our unprivileged user
+USER www-data
