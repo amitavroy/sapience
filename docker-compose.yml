@@ -8,10 +8,8 @@ services:
       dockerfile: ./docker/php/php.dockerfile
       target: development
       args:
-        USER_ID: ${UID:-1000}
-        GROUP_ID: ${GID:-1000}
-    volumes:
-      - .:/var/www/html
+        USER_ID: ${UID:-1004}
+        GROUP_ID: ${GID:-1004}
     networks:
       - sapience
     extra_hosts:
@@ -38,7 +36,6 @@ services:
     image: mariadb:lts
     restart: unless-stopped
     tty: true
-    user: root
     ports:
       - ${DB_EXTERNAL_PORT:-3307}:3306
     volumes:
@@ -132,7 +129,7 @@ services:
     image: typesense/typesense:29.0
     restart: unless-stopped
     ports:
-      - ${TYPESENSE_PORT:-8108}:8108
+      - 8110:8108
     volumes:
       - ./docker/data/typesense:/data
     command: '--data-dir /data --api-key=${TYPESENSE_API_KEY:-xyz} --enable-cors'
@@ -151,4 +148,3 @@ services:
       TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-xyz}
     depends_on:
       - typesense
-
