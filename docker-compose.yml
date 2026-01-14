@@ -70,7 +70,7 @@ services:
     restart: unless-stopped
 
   mysql:
-    image: mariadb:lts
+    image: mysql:8.0.44-debian
     restart: unless-stopped
     profiles: ["development", "production"]
     tty: true
@@ -81,10 +81,10 @@ services:
     networks:
       - sapience
     environment:
-      MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: 1
-      MARIADB_DATABASE: ${DB_DATABASE:-sapience}
-      MARIADB_USER: ${DB_USERNAME:-sapience}
-      MARIADB_PASSWORD: ${DB_PASSWORD:-sapience}
+      MYSQL_ALLOW_EMPTY_PASSWORD: yes
+      MYSQL_DATABASE: ${DB_DATABASE:-sapience}
+      MYSQL_USER: ${DB_USERNAME:-sapience}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-sapience}
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
