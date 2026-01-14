@@ -24,6 +24,9 @@ class CreateDatasetAction
             $dataset = Dataset::create([
                 'name' => Arr::get($validated, 'name'),
                 'description' => Arr::get($validated, 'description'),
+                'instructions' => Arr::get($validated, 'instructions'),
+                'steps' => Arr::get($validated, 'steps'),
+                'output_instructions' => Arr::get($validated, 'output_instructions'),
                 'organisation_id' => $organisation->id,
                 'owner_id' => $user->id,
                 'is_active' => true,

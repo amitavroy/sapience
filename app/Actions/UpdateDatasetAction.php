@@ -16,6 +16,7 @@ class UpdateDatasetAction
             'name' => Arr::get($validated, 'name'),
             'description' => Arr::get($validated, 'description'),
             'instructions' => Arr::get($validated, 'instructions'),
+            'steps' => Arr::get($validated, 'steps'),
             'output_instructions' => Arr::get($validated, 'output_instructions'),
         ]);
 

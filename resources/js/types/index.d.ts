@@ -40,6 +40,7 @@ export interface Dataset {
   description: string | null;
   instructions: string | null;
   output_instructions: string | null;
+  steps: string | null;
   is_active: boolean;
   files_count: number;
   conversations_count?: number;
@@ -77,7 +78,12 @@ export interface Research {
   query: string;
   instructions: string | null;
   report?: string | null;
-  status: 'pending' | 'processing' | 'awaiting_feedback' | 'completed' | 'failed';
+  status:
+    | 'pending'
+    | 'processing'
+    | 'awaiting_feedback'
+    | 'completed'
+    | 'failed';
   interruption_data?: {
     topic: string;
     search_terms: string[];

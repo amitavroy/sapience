@@ -355,6 +355,7 @@ test('admin can update dataset with instructions and output instructions', funct
         [
             'name' => 'Updated Name',
             'instructions' => "Custom instruction 1\nCustom instruction 2",
+            'steps' => "Step 1\nStep 2",
             'output_instructions' => "Output instruction 1\nOutput instruction 2",
         ]
     );
@@ -366,6 +367,7 @@ test('admin can update dataset with instructions and output instructions', funct
         'id' => $dataset->id,
         'name' => 'Updated Name',
         'instructions' => "Custom instruction 1\nCustom instruction 2",
+        'steps' => "Step 1\nStep 2",
         'output_instructions' => "Output instruction 1\nOutput instruction 2",
     ]);
 });
@@ -380,6 +382,7 @@ test('admin can update dataset without instructions', function () {
         'owner_id' => $user->id,
         'name' => 'Original Name',
         'instructions' => 'Original Instructions',
+        'steps' => 'Original Steps',
         'output_instructions' => 'Original Output Instructions',
     ]);
 
@@ -388,6 +391,7 @@ test('admin can update dataset without instructions', function () {
         [
             'name' => 'Updated Name',
             'instructions' => null,
+            'steps' => null,
             'output_instructions' => null,
         ]
     );
@@ -399,6 +403,7 @@ test('admin can update dataset without instructions', function () {
         'id' => $dataset->id,
         'name' => 'Updated Name',
         'instructions' => null,
+        'steps' => null,
         'output_instructions' => null,
     ]);
 });

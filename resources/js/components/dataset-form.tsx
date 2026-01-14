@@ -28,6 +28,9 @@ export default function DatasetForm({
 
   const submitLabel = type === 'create' ? 'Create Dataset' : 'Update Dataset';
 
+  const textareaClassName =
+    'flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50';
+
   return (
     <Form action={action} className="flex flex-col gap-6">
       {({ processing, errors }) => (
@@ -54,34 +57,47 @@ export default function DatasetForm({
                 name="description"
                 rows={4}
                 defaultValue={dataset?.description || ''}
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                className={textareaClassName}
                 placeholder="Enter dataset description (optional)"
               />
               <InputError message={errors.description} />
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="instructions">Instructions</Label>
+              <Label htmlFor="instructions">Background</Label>
               <textarea
                 id="instructions"
                 name="instructions"
                 rows={6}
                 defaultValue={dataset?.instructions || ''}
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                placeholder="Enter dataset instructions (optional)"
+                className={textareaClassName}
+                placeholder="Enter background (optional)"
               />
               <InputError message={errors.instructions} />
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="output_instructions">Output Instructions</Label>
+              <Label htmlFor="steps">Steps</Label>
+              <textarea
+                id="steps"
+                name="steps"
+                rows={6}
+                defaultValue={dataset?.steps || ''}
+                className={textareaClassName}
+                placeholder="Enter steps (optional)"
+              />
+              <InputError message={errors.steps} />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="output_instructions">Output</Label>
               <textarea
                 id="output_instructions"
                 name="output_instructions"
                 rows={6}
                 defaultValue={dataset?.output_instructions || ''}
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                placeholder="Enter output instructions (optional)"
+                className={textareaClassName}
+                placeholder="Enter output (optional)"
               />
               <InputError message={errors.output_instructions} />
             </div>

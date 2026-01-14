@@ -1,8 +1,18 @@
 import { MarkdownContent } from '@/components/markdown-content';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { Spinner } from '@/components/ui/spinner';
 import { type ResearchLink } from '@/types';
-import { CheckCircle2, ChevronDown, Clock, ExternalLink, XCircle } from 'lucide-react';
+import {
+  CheckCircle2,
+  ChevronDown,
+  Clock,
+  ExternalLink,
+  XCircle,
+} from 'lucide-react';
 import { useState } from 'react';
 
 interface ResearchLinksListProps {
@@ -16,7 +26,9 @@ function ResearchLinkItem({ link }: { link: ResearchLink }) {
 
   const getStatusIcon = () => {
     if (link.status === 'completed') {
-      return <CheckCircle2 className="size-5 text-green-600 dark:text-green-500" />;
+      return (
+        <CheckCircle2 className="size-5 text-green-600 dark:text-green-500" />
+      );
     }
     if (link.status === 'pending') {
       return <Clock className="size-5 text-yellow-600 dark:text-yellow-500" />;
@@ -33,15 +45,15 @@ function ResearchLinkItem({ link }: { link: ResearchLink }) {
       onOpenChange={setIsOpen}
       className="rounded-lg border border-border"
     >
-      <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 p-4 text-left hover:bg-accent/50 transition-colors">
-        <div className="flex flex-1 items-center gap-3 min-w-0">
+      <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 p-4 text-left transition-colors hover:bg-accent/50">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           {getStatusIcon()}
           <a
             href={link.url}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="flex items-center gap-2 text-blue-600 underline hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex-1 min-w-0"
+            className="flex min-w-0 flex-1 items-center gap-2 text-blue-600 underline hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
           >
             <span className="line-clamp-1 truncate">{link.url}</span>
             <ExternalLink className="size-4 shrink-0" />
@@ -55,15 +67,15 @@ function ResearchLinkItem({ link }: { link: ResearchLink }) {
       </CollapsibleTrigger>
       <CollapsibleContent className="px-4 pb-4">
         {link.summary ? (
-          <div className="mt-2 pt-2 border-t">
+          <div className="mt-2 border-t pt-2">
             <MarkdownContent content={link.summary} />
           </div>
         ) : link.status === 'pending' ? (
-          <div className="mt-2 pt-2 border-t text-sm text-muted-foreground">
+          <div className="mt-2 border-t pt-2 text-sm text-muted-foreground">
             Content is being processed...
           </div>
         ) : link.status === 'failed' ? (
-          <div className="mt-2 pt-2 border-t text-sm text-red-600 dark:text-red-500">
+          <div className="mt-2 border-t pt-2 text-sm text-red-600 dark:text-red-500">
             Failed to process this link
           </div>
         ) : null}
@@ -86,9 +98,7 @@ export function ResearchLinksList({
       {showContainer && (
         <div className="mb-4 flex items-center gap-2">
           <h2 className="text-lg font-semibold">Research Links</h2>
-          {isProcessing && (
-            <Spinner className="size-4 text-muted-foreground" />
-          )}
+          {isProcessing && <Spinner className="size-4 text-muted-foreground" />}
         </div>
       )}
       <div className="space-y-2">

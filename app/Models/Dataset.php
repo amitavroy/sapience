@@ -23,6 +23,7 @@ class Dataset extends Model
         'name',
         'description',
         'instructions',
+        'steps',
         'output_instructions',
         'is_active',
         'owner_id',

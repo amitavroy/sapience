@@ -150,16 +150,17 @@ export default function ResearchShow({
           )}
         </div>
 
-        {research.status === 'processing' && (!research.research_links || research.research_links.length === 0) ? (
+        {research.status === 'processing' &&
+        (!research.research_links || research.research_links.length === 0) ? (
           <div className="rounded-xl border border-sidebar-border/70 p-12 dark:border-sidebar-border">
             <div className="flex flex-col items-center justify-center gap-4 text-center">
               <Spinner className="size-8 text-primary" />
               <div className="space-y-2">
                 <h2 className="text-xl font-semibold">Processing Research</h2>
-                <p className="text-muted-foreground max-w-md">
+                <p className="max-w-md text-muted-foreground">
                   {research.interruption_data?.user_feedback
-                    ? 'We\'re processing your feedback and continuing the research. This may take a few moments...'
-                    : 'We\'re analyzing your query and generating search terms. This may take a few moments...'}
+                    ? "We're processing your feedback and continuing the research. This may take a few moments..."
+                    : "We're analyzing your query and generating search terms. This may take a few moments..."}
                 </p>
               </div>
             </div>

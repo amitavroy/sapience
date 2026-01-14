@@ -16,7 +16,7 @@ class StartResearchRequest extends FormRequest
         $organisation = $this->route('organisation');
         $research = $this->route('research');
 
-        if (!$organisation instanceof Organisation || !$research instanceof Research) {
+        if (! $organisation instanceof Organisation || ! $research instanceof Research) {
             return false;
         }
 
@@ -26,7 +26,7 @@ class StartResearchRequest extends FormRequest
         }
 
         // Ensure user is a member of the organisation
-        if (!$this->user()->organisations()->where('organisations.id', $organisation->id)->exists()) {
+        if (! $this->user()->organisations()->where('organisations.id', $organisation->id)->exists()) {
             return false;
         }
 

@@ -31,6 +31,9 @@ class CreateDatasetRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
+            'instructions' => ['nullable', 'string'],
+            'steps' => ['nullable', 'string'],
+            'output_instructions' => ['nullable', 'string'],
         ];
     }
 }

@@ -92,12 +92,17 @@ class SapienceBot extends RAG
             ? array_filter(array_map('trim', explode("\n", $this->dataset->instructions)))
             : $defaultBackground;
 
+        $steps = $this->dataset->steps
+            ? array_filter(array_map('trim', explode("\n", $this->dataset->steps)))
+            : [];
+
         $output = $this->dataset->output_instructions
             ? array_filter(array_map('trim', explode("\n", $this->dataset->output_instructions)))
             : $defaultOutput;
 
         return (string) new SystemPrompt(
             background: $background,
+            steps: $steps,
             output: $output,
         );
     }

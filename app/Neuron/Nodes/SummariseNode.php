@@ -36,7 +36,7 @@ class SummariseNode extends Node
             $result = $crawlService->execute($researchLink->url);
 
             // Skip if crawl was unsuccessful or content is empty
-            if (!$result->success || empty($result->content)) {
+            if (! $result->success || empty($result->content)) {
                 $researchLink->status = 'failed';
                 $researchLink->save();
 

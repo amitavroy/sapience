@@ -14,10 +14,7 @@ export function ResearchInterruptionUI({
   isOwner,
   onResumeSuccess,
 }: ResearchInterruptionUIProps) {
-  if (
-    research.status !== 'awaiting_feedback' ||
-    !research.interruption_data
-  ) {
+  if (research.status !== 'awaiting_feedback' || !research.interruption_data) {
     return null;
   }
 
@@ -59,4 +56,3 @@ export function ResearchInterruptionUI({
     </div>
   );
 }
-
