@@ -8,6 +8,8 @@ FROM serversideup/php:8.4-fpm-nginx-bookworm AS base
 ############################################
 FROM base AS development
 
+ENV PHP_OPCACHE_ENABLE=1
+
 # Switch to root so we can do root things
 USER root
 
@@ -20,7 +22,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Adding packages for Code coverage
-RUN install-php-extensions pcov
+RUN install-php-extensions pcov opentelemetry
 
 # Save the build arguments as a variable
 ARG USER_ID
@@ -39,12 +41,6 @@ WORKDIR /var/www/html
 # Copy our app files as www-data (33:33)
 COPY --chown=www-data:www-data . /var/www/html
 
-RUN composer install
-
-RUN npm install
-
-RUN chown -R www-data:www-data /var/www/html
-
 # Drop back to our unprivileged user
 USER www-data
 
@@ -56,8 +52,11 @@ USER www-data
 # calling any of that permission stuff
 FROM base AS production
 
+ENV PHP_OPCACHE_ENABLE=1
+
 USER root
 
+# Install Poppler utilities and Node.js
 RUN apt-get update && \
     apt-get install -y --no-install-recommends poppler-utils && \
     curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
@@ -65,16 +64,20 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+RUN install-php-extensions pcov opentelemetry
+
 WORKDIR /var/www/html
 
-# Copy our app files as www-data (33:33)
-COPY --chown=www-data:www-data . /var/www/html
+COPY composer.* ./
 
 RUN composer install
 
+COPY package.json package-lock.json ./
+
 RUN npm install
 
-RUN chown -R www-data:www-data /var/www/html
+# Copy our app files as www-data (33:33)
+COPY --chown=www-data:www-data . /var/www/html
 
 # Drop back to our unprivileged user
 USER www-data
