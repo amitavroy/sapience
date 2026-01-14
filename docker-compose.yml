@@ -108,7 +108,7 @@ services:
     depends_on:
       - mysql
     image: phpmyadmin
-    profiles: ["development"]
+    profiles: ["development", "production"]
     restart: unless-stopped
     ports:
       - ${DB_ADMIN_UI:-8080}:80
@@ -149,7 +149,7 @@ services:
   minio:
     image: minio/minio:latest
     restart: unless-stopped
-    profiles: ["development", "production"]
+    profiles: ["development"]
     ports:
       - ${MINIO_API_PORT:-9000}:9000
       - ${MINIO_CONSOLE_PORT:-9001}:9001
