@@ -1,17 +1,18 @@
 <?php
 
-use App\Http\Controllers\AuditController;
-use App\Http\Controllers\ConversationController;
-use App\Http\Controllers\DatasetController;
-use App\Http\Controllers\FileController;
-use App\Http\Controllers\OrganisationController;
-use App\Http\Controllers\ResearchController;
-use App\Http\Controllers\StartAuditController;
-use App\Http\Controllers\StartResearchController;
-use App\Http\Middleware\EnsureUserHasOrganisation;
-use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
+use OpenTelemetry\API\Globals;
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\FileController;
+use App\Http\Controllers\AuditController;
+use App\Http\Controllers\DatasetController;
+use App\Http\Controllers\ResearchController;
+use App\Http\Controllers\StartAuditController;
+use App\Http\Controllers\ConversationController;
+use App\Http\Controllers\OrganisationController;
+use App\Http\Controllers\StartResearchController;
+use App\Http\Middleware\EnsureUserHasOrganisation;
 
 Route::get('/', function () {
     return Inertia::render('welcome', [
@@ -95,3 +96,36 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 require __DIR__.'/settings.php';
+
+Route::get('/test-logs', function () {
+    logger()->info('Test info log', ['user_id' => 123]);
+    logger()->error('Test error log', ['error_code' => 500]);
+    logger()->warning('Test warning log');
+
+    return response()->json([
+        'status' => 'success',
+        'message' => 'Logs generated - check OneUptime dashboard'
+    ]);
+});
+
+Route::get('/apm-test', function () {
+    $tracer = Globals::tracerProvider()->getTracer('laravel-demo-1234567890');
+
+    $span = $tracer->spanBuilder('apm-test-operation')
+        ->setAttribute('user.id', 123)
+        ->setAttribute('operation.type', 'test')
+        ->startSpan();
+
+    sleep(1);
+
+    logger()->info('APM test executed', ['operation' => 'apm-test']);
+
+    $span->addEvent('operation completed', ['result' => 'success']);
+    $span->end();
+
+    return response()->json([
+        'status' => 'success',
+        'message' => 'APM trace generated',
+        'timestamp' => now()
+    ]);
+});

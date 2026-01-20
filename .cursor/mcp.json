@@ -6,7 +6,7 @@
                 "compose",
                 "exec",
                 "-T",
-                "php",
+                "sapience-php-dev",
                 "php",
                 "artisan",
                 "boost:mcp"
