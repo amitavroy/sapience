@@ -11,7 +11,7 @@ Each slice ends in a working, reviewable state with passing tests. Pause for rev
 | 2 | Slash command end-to-end | `app/schemas/google_chat.py`: `AppCommandMetadata`, `AppCommandPayload`, `ChatPayload.app_command_payload` | [x] |
 | 2 | Slash command end-to-end | `app/services/google_chat.py`: private `_handle_command(payload: AppCommandPayload)` logs command id, space, sender, stripped `argumentText`; `handle_event` dispatches to it | [x] |
 | 2 | Slash command end-to-end | `app/routers/ingest.py`: dispatch and ack when either `message_payload` or `app_command_payload` is present; `{}` only when neither | [x] |
-| 2 | Slash command end-to-end | Tests: slash fixture through the endpoint (200 ack, dispatched once, no `systemIdToken` in the enqueued payload); `handle_event` with the slash fixture logs the command line with `text='hello'` | [ ] |
+| 2 | Slash command end-to-end | Tests: slash fixture through the endpoint (200 ack, dispatched once, no `systemIdToken` in the enqueued payload); `handle_event` with the slash fixture logs the command line with `text='hello'` | [x] |
 | 2 | Slash command end-to-end | Manual: run API + `make worker` via tunnel, run `/add-knowledge hello` in a space, worker log shows the command line; @mention still logs the message line | [ ] |
 | 3 | Docs | `docs/wiki/google-bot.md`: document the two event kinds, their payload keys, and where each is handled | [ ] |
 

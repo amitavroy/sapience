@@ -4,7 +4,7 @@ from app.core.logger import logger
 from app.schemas.google_chat import ChatPayload
 from app.services.google_chat import handle_event
 from app.tasks.google_chat import process_chat_event
-from tests.google_chat_helpers import CHAT_FIXTURES, load_fixture
+from tests.google_chat_helpers import CHAT_FIXTURES, SLASH_FIXTURE, load_fixture
 
 SPACE, DM = CHAT_FIXTURES
 
@@ -34,6 +34,15 @@ async def test_handle_event_logs_space_sender_and_stripped_text(
 
     assert chat_messages(logs) == [
         f"google chat message space={space} sender=ann@example.com text={text}"
+    ]
+
+
+async def test_handle_event_logs_slash_command_not_a_message(logs: list[dict]) -> None:
+    await handle_event(ChatPayload.model_validate(load_fixture(SLASH_FIXTURE)["chat"]))
+
+    assert chat_messages(logs) == []
+    assert [r["message"] for r in logs] == [
+        "google chat command id=1 space=spaces/1234567890 sender=john.doe@example.com text='hello'"
     ]
 
 

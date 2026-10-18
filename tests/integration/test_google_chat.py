@@ -6,7 +6,7 @@ import pytest
 
 from app.core.config import settings
 from app.services.google_chat import ACK, reply
-from tests.google_chat_helpers import CHAT_FIXTURES, load_fixture
+from tests.google_chat_helpers import CHAT_FIXTURES, SLASH_FIXTURE, load_fixture
 
 Sign = Callable[..., str]
 
@@ -36,6 +36,28 @@ async def test_valid_event_is_acked_and_queued(
         )
     ]
     assert token not in json.dumps(dispatched)  # the ID token never reaches the queue
+
+
+async def test_slash_command_is_acked_and_queued(
+    chat_client: httpx.AsyncClient, sign_google_token: Sign, dispatched: list[tuple]
+) -> None:
+    token = sign_google_token()
+
+    response = await chat_client.post(
+        "/ingest/google-chat", json=signed_event(SLASH_FIXTURE, token)
+    )
+
+    assert response.status_code == 200
+    assert response.json() == reply(ACK)
+    assert dispatched == [
+        (
+            "app.tasks.google_chat.process_chat_event",
+            load_fixture(SLASH_FIXTURE)["chat"],
+            response.headers["x-request-id"],
+        )
+    ]
+    assert "appCommandPayload" in dispatched[0][1]
+    assert token not in json.dumps(dispatched)
 
 
 async def test_event_without_a_message_is_ignored(

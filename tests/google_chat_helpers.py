@@ -10,6 +10,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 
 FIXTURES = Path(__file__).parent / "fixtures"
 CHAT_FIXTURES = ["google-chat-incoming.json", "google-chat-incoming-ind.json"]  # space, DM
+SLASH_FIXTURE = "google-slash-command.json"  # /add-knowledge hello
 
 
 def load_fixture(name: str) -> dict:
