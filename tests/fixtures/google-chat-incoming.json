@@ -1,0 +1,96 @@
+{
+    "commonEventObject": {
+      "userLocale": "en",
+      "hostApp": "CHAT",
+      "platform": "WEB",
+      "timeZone": {
+        "id": "Asia/Kolkata",
+        "offset": 1.98E7
+      }
+    },
+    "authorizationEventObject": {
+      "systemIdToken": "PLACEHOLDER"
+    },
+    "chat": {
+      "user": {
+        "name": "users/1001",
+        "displayName": "Ann Example",
+        "avatarUrl": "https://lh3.googleusercontent.com/a/ACg8ocIoVnqJFxweIR3MncgO_40NjSAN02Ey0fKUDjgMotvh6SPyBkVL\u003dk-no",
+        "email": "ann@example.com",
+        "type": "HUMAN",
+        "domainId": "example"
+      },
+      "eventTime": "2026-10-18T11:11:59.310463Z",
+      "messagePayload": {
+        "space": {
+          "name": "spaces/AAAAAAAAAAA",
+          "type": "ROOM",
+          "displayName": "Test Space",
+          "spaceThreadingState": "THREADED_MESSAGES",
+          "spaceType": "SPACE",
+          "spaceHistoryState": "HISTORY_ON",
+          "lastActiveTime": "2026-10-18T11:11:59.310463Z",
+          "membershipCount": {
+            "joinedDirectHumanUserCount": 1.0
+          },
+          "customer": "customers/C0example",
+          "spaceUri": "https://chat.google.com/room/AAAAAAAAAAA?cls\u003d11"
+        },
+        "message": {
+          "name": "spaces/AAAAAAAAAAA/messages/MSG1.MSG1",
+          "sender": {
+            "name": "users/1001",
+            "displayName": "Ann Example",
+            "avatarUrl": "https://lh3.googleusercontent.com/a/ACg8ocIoVnqJFxweIR3MncgO_40NjSAN02Ey0fKUDjgMotvh6SPyBkVL\u003dk-no",
+            "email": "ann@example.com",
+            "type": "HUMAN",
+            "domainId": "example"
+          },
+          "createTime": "2026-10-18T11:11:59.310463Z",
+          "text": "@Sapience hi",
+          "annotations": [{
+            "type": "USER_MENTION",
+            "startIndex": 0.0,
+            "length": 9.0,
+            "userMention": {
+              "user": {
+                "name": "users/2002",
+                "displayName": "Sapience",
+                "avatarUrl": "https://www.gstatic.com/dynamite/images/quickstart-app-avatar.png",
+                "type": "BOT"
+              },
+              "type": "MENTION"
+            }
+          }],
+          "thread": {
+            "name": "spaces/AAAAAAAAAAA/threads/MSG1",
+            "retentionSettings": {
+              "state": "PERMANENT"
+            }
+          },
+          "space": {
+            "name": "spaces/AAAAAAAAAAA",
+            "type": "ROOM",
+            "displayName": "Test Space",
+            "spaceThreadingState": "THREADED_MESSAGES",
+            "spaceType": "SPACE",
+            "spaceHistoryState": "HISTORY_ON",
+            "lastActiveTime": "2026-10-18T11:11:59.310463Z",
+            "membershipCount": {
+              "joinedDirectHumanUserCount": 1.0
+            },
+            "customer": "customers/C0example",
+            "spaceUri": "https://chat.google.com/room/AAAAAAAAAAA?cls\u003d11"
+          },
+          "argumentText": " hi",
+          "retentionSettings": {
+            "state": "PERMANENT"
+          },
+          "messageHistoryState": "HISTORY_ON",
+          "formattedText": "\u003cchat-user data-user\u003d\"users/2002\"\u003e\u003c/chat-user\u003e hi\n",
+          "markupSyntax": "MARKUP_SYNTAX_MARKDOWN"
+        },
+        "configCompleteRedirectUri": "https://chat.google.com/api/bot_config_complete?token\u003dPLACEHOLDER"
+      }
+    }
+  }

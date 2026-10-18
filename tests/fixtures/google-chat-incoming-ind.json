@@ -1,0 +1,80 @@
+{
+    "commonEventObject": {
+      "userLocale": "en",
+      "hostApp": "CHAT",
+      "platform": "WEB",
+      "timeZone": {
+        "id": "Asia/Kolkata",
+        "offset": 1.98E7
+      }
+    },
+    "authorizationEventObject": {
+      "systemIdToken": "PLACEHOLDER"
+    },
+    "chat": {
+      "user": {
+        "name": "users/1001",
+        "displayName": "Ann Example",
+        "avatarUrl": "https://lh3.googleusercontent.com/a/ACg8ocIoVnqJFxweIR3MncgO_40NjSAN02Ey0fKUDjgMotvh6SPyBkVL\u003dk-no",
+        "email": "ann@example.com",
+        "type": "HUMAN",
+        "domainId": "example"
+      },
+      "eventTime": "2026-10-18T11:28:43.517519Z",
+      "messagePayload": {
+        "space": {
+          "name": "spaces/BBBBBBBBBBB",
+          "type": "DM",
+          "singleUserBotDm": true,
+          "spaceThreadingState": "THREADED_MESSAGES",
+          "spaceType": "DIRECT_MESSAGE",
+          "spaceHistoryState": "HISTORY_ON",
+          "lastActiveTime": "2026-10-18T11:28:43.517519Z",
+          "membershipCount": {
+            "joinedDirectHumanUserCount": 1.0
+          },
+          "spaceUri": "https://chat.google.com/dm/BBBBBBBBBBB?cls\u003d11"
+        },
+        "message": {
+          "name": "spaces/BBBBBBBBBBB/messages/MSG2.MSG2",
+          "sender": {
+            "name": "users/1001",
+            "displayName": "Ann Example",
+            "avatarUrl": "https://lh3.googleusercontent.com/a/ACg8ocIoVnqJFxweIR3MncgO_40NjSAN02Ey0fKUDjgMotvh6SPyBkVL\u003dk-no",
+            "email": "ann@example.com",
+            "type": "HUMAN",
+            "domainId": "example"
+          },
+          "createTime": "2026-10-18T11:28:43.517519Z",
+          "text": "Hello",
+          "thread": {
+            "name": "spaces/BBBBBBBBBBB/threads/MSG2",
+            "retentionSettings": {
+              "state": "PERMANENT"
+            }
+          },
+          "space": {
+            "name": "spaces/BBBBBBBBBBB",
+            "type": "DM",
+            "singleUserBotDm": true,
+            "spaceThreadingState": "THREADED_MESSAGES",
+            "spaceType": "DIRECT_MESSAGE",
+            "spaceHistoryState": "HISTORY_ON",
+            "lastActiveTime": "2026-10-18T11:28:43.517519Z",
+            "membershipCount": {
+              "joinedDirectHumanUserCount": 1.0
+            },
+            "spaceUri": "https://chat.google.com/dm/BBBBBBBBBBB?cls\u003d11"
+          },
+          "argumentText": "Hello",
+          "retentionSettings": {
+            "state": "PERMANENT"
+          },
+          "messageHistoryState": "HISTORY_ON",
+          "formattedText": "Hello\n",
+          "markupSyntax": "MARKUP_SYNTAX_MARKDOWN"
+        },
+        "configCompleteRedirectUri": "https://chat.google.com/api/bot_config_complete?token\u003dPLACEHOLDER"
+      }
+    }
+  }
