@@ -11,12 +11,13 @@ router = APIRouter(prefix="/ingest", tags=["ingest"])
 
 @router.post("/google-chat")
 async def google_chat(event: VerifiedChatEvent) -> dict:
-    if event.chat is None or event.chat.message_payload is None:
-        return {}  # not a message (e.g. added to a space): nothing to ack or queue
+    chat = event.chat
+    if chat is None or (chat.message_payload is None and chat.app_command_payload is None):
+        return {}  # neither a message nor a command (e.g. added to a space): nothing to queue
     # only the chat payload is enqueued, never the ID token
     await dispatch(
         process_chat_event,
-        event.chat.model_dump(mode="json", by_alias=True, exclude_unset=True),
+        chat.model_dump(mode="json", by_alias=True, exclude_unset=True),
         trace_id.get(),
     )
     return google_chat_service.reply(google_chat_service.ACK)
