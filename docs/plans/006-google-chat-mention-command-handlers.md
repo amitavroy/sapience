@@ -8,7 +8,7 @@ Each slice ends in a working, reviewable state with passing tests. Pause for rev
 |---|-------|------|------|
 | 1 | Split handlers | `app/services/google_chat.py`: `handle_event` only decides the event kind; current logging moves to private `_handle_mention(payload: MessagePayload)`; mention behaviour unchanged | [x] |
 | 1 | Split handlers | Tests: `handle_event` with the mention fixture logs the same line as before; payload with neither mention nor command logs nothing and does not raise | [x] |
-| 2 | Slash command end-to-end | `app/schemas/google_chat.py`: `AppCommandMetadata`, `AppCommandPayload`, `ChatPayload.app_command_payload` | [ ] |
+| 2 | Slash command end-to-end | `app/schemas/google_chat.py`: `AppCommandMetadata`, `AppCommandPayload`, `ChatPayload.app_command_payload` | [x] |
 | 2 | Slash command end-to-end | `app/services/google_chat.py`: private `_handle_command(payload: AppCommandPayload)` logs command id, space, sender, stripped `argumentText`; `handle_event` dispatches to it | [ ] |
 | 2 | Slash command end-to-end | `app/routers/ingest.py`: dispatch and ack when either `message_payload` or `app_command_payload` is present; `{}` only when neither | [ ] |
 | 2 | Slash command end-to-end | Tests: slash fixture through the endpoint (200 ack, dispatched once, no `systemIdToken` in the enqueued payload); `handle_event` with the slash fixture logs the command line with `text='hello'` | [ ] |

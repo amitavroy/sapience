@@ -43,10 +43,22 @@ class MessagePayload(ChatModel):
     message: ChatMessage
 
 
+class AppCommandMetadata(ChatModel):
+    app_command_id: int  # Google sends it as a float (1.0)
+    app_command_type: str  # SLASH_COMMAND
+
+
+class AppCommandPayload(ChatModel):
+    space: ChatSpace
+    message: ChatMessage
+    app_command_metadata: AppCommandMetadata
+
+
 class ChatPayload(ChatModel):
     user: ChatUser | None = None
     event_time: datetime | None = None
-    message_payload: MessagePayload | None = None  # absent for e.g. added-to-space events
+    message_payload: MessagePayload | None = None  # @mention; absent for e.g. added-to-space
+    app_command_payload: AppCommandPayload | None = None  # slash command
 
 
 class GoogleChatEvent(ChatModel):
