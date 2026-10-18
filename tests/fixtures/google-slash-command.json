@@ -1,0 +1,105 @@
+{
+    "commonEventObject": {
+      "userLocale": "en",
+      "hostApp": "CHAT",
+      "platform": "WEB",
+      "timeZone": {
+        "id": "Asia/Kolkata",
+        "offset": 1.98E7
+      }
+    },
+    "authorizationEventObject": {
+      "systemIdToken": ""
+    },
+    "chat": {
+      "user": {
+        "name": "users/1234567890",
+        "displayName": "John Doe",
+        "avatarUrl": "",
+        "email": "john.doe@example.com",
+        "type": "HUMAN",
+        "domainId": "example.com"
+      },
+      "eventTime": "2026-10-18T18:04:50.832191Z",
+      "appCommandPayload": {
+        "appCommandMetadata": {
+          "appCommandId": 1.0,
+          "appCommandType": "SLASH_COMMAND"
+        },
+        "space": {
+          "name": "spaces/1234567890",
+          "type": "ROOM",
+          "displayName": "Test-John",
+          "spaceThreadingState": "THREADED_MESSAGES",
+          "spaceType": "SPACE",
+          "spaceHistoryState": "HISTORY_ON",
+          "lastActiveTime": "2026-10-18T15:46:49.325695Z",
+          "membershipCount": {
+            "joinedDirectHumanUserCount": 1.0
+          },
+          "customer": "customers/C0example",
+          "spaceUri": "https://chat.google.com/room/1234567890?cls\u003d11"
+        },
+        "message": {
+          "name": "spaces/1234567890/messages/1234567890.1234567890",
+          "sender": {
+            "name": "users/1234567890",
+            "displayName": "John Doe",
+            "avatarUrl": "",
+            "email": "john.doe@example.com",
+            "type": "HUMAN",
+            "domainId": "example.com"
+          },
+          "createTime": "2026-10-18T18:04:50.832191Z",
+          "text": "/add-knowledge hello",
+          "annotations": [{
+            "type": "SLASH_COMMAND",
+            "startIndex": 0.0,
+            "length": 14.0,
+            "slashCommand": {
+              "bot": {
+                "name": "users/9876543210",
+                "displayName": "Bot User",
+                "avatarUrl": "https://www.gstatic.com/dynamite/images/quickstart-app-avatar.png",
+                "type": "BOT"
+              },
+              "type": "INVOKE",
+              "commandName": "/add-knowledge",
+              "commandId": 1.0
+            }
+          }],
+          "thread": {
+            "name": "spaces/1234567890/threads/1234567890",
+            "retentionSettings": {
+              "state": "PERMANENT"
+            }
+          },
+          "space": {
+            "name": "spaces/1234567890",
+            "type": "ROOM",
+            "displayName": "Test-John",
+            "spaceThreadingState": "THREADED_MESSAGES",
+            "spaceType": "SPACE",
+            "spaceHistoryState": "HISTORY_ON",
+            "lastActiveTime": "2026-10-18T18:04:50.832191Z",
+            "membershipCount": {
+              "joinedDirectHumanUserCount": 1.0
+            },
+            "customer": "customers/1234567890",
+            "spaceUri": "https://chat.google.com/room/1234567890?cls\u003d11"
+          },
+          "argumentText": " hello",
+          "slashCommand": {
+            "commandId": 1.0
+          },
+          "retentionSettings": {
+            "state": "PERMANENT"
+          },
+          "messageHistoryState": "HISTORY_ON",
+          "formattedText": "/add-knowledge hello",
+          "markupSyntax": "MARKUP_SYNTAX_CHAT"
+        },
+        "configCompleteRedirectUri": "https://chat.google.com/api/bot_config_complete?token\u003d1234567890"
+      }
+    }
+  }

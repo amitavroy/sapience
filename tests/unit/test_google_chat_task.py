@@ -46,6 +46,14 @@ async def test_handle_event_ignores_event_without_a_message(logs: list[dict]) ->
     assert chat_messages(logs) == []
 
 
+async def test_handle_event_logs_nothing_for_a_payload_with_neither_message_nor_command(
+    logs: list[dict],
+) -> None:
+    await handle_event(ChatPayload())
+
+    assert logs == []
+
+
 def test_task_runs_handle_event_under_the_request_trace_id(logs: list[dict]) -> None:
     # sync test: the task drives its async body with asyncio.run, like the real worker
     process_chat_event(load_fixture(SPACE)["chat"], "trace1234")
