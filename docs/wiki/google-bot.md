@@ -1,19 +1,21 @@
 # Google Chat webhook
 
-Google Chat sends every @mention of our app to `POST /ingest/google-chat`. The endpoint proves the request came from Google, answers "Got it" straight away, and hands the message to a Celery worker.
+Google Chat sends every @mention and every slash command of our app to `POST /ingest/google-chat`. The endpoint proves the request came from Google, answers "Got it" straight away, and hands the event to a Celery worker.
 
     Google Chat → POST /ingest/google-chat
                       │
                       ├─ verify ID token ── fails → 401, nothing queued
-                      ├─ no message in the event → 200 {}
-                      └─ message → dispatch process_chat_event → 200 "Got it"
+                      ├─ no mention and no slash command in the event → 200 {}
+                      └─ mention or slash command → dispatch process_chat_event → 200 "Got it"
                                         │
-                                        └─ worker: handle_event logs space / sender / text
+                                        └─ worker: handle_event
+                                              ├─ messagePayload → _handle_mention
+                                              └─ appCommandPayload → _handle_command
 
 | Case | Status | Body | Queued |
 |------|--------|------|--------|
-| Verified event with a message | 200 | "Got it" add-on reply | yes |
-| Verified event without a message (e.g. app added to a space) | 200 | `{}` | no |
+| Verified event with a mention or a slash command | 200 | "Got it" add-on reply | yes |
+| Verified event with neither (e.g. app added to a space) | 200 | `{}` | no |
 | Missing or malformed body, missing or invalid token, token for another audience or service account, expired token | 401 | `Invalid Google Chat request` | no |
 | `GOOGLE_CHAT_AUDIENCE` or `GOOGLE_CHAT_SERVICE_ACCOUNT_EMAIL` empty | 401 | same | no |
 | Broker (Redis) down | 500 | | no |
@@ -22,6 +24,24 @@ Google Chat sends every @mention of our app to `POST /ingest/google-chat`. The e
 - A malformed body gets 401, not 422, so an unauthenticated caller learns nothing about the expected payload.
 - For a 401, the log has one warning (`google chat event rejected: ...`) and never the token.
 - On a 500 from a down broker, Google retries the event.
+
+# Event kinds
+
+Both kinds share the same envelope (`commonEventObject`, `authorizationEventObject`, `chat.user`, `chat.eventTime`). The body sits under a different key of `chat`, and that key is the only thing used to tell them apart.
+
+| | @mention | Slash command |
+|---|---|---|
+| Key under `chat` | `messagePayload` | `appCommandPayload` |
+| Extra metadata | none | `appCommandMetadata` (`appCommandId`, `appCommandType: SLASH_COMMAND`) |
+| `message.text` | `@Sapience hi` | `/add-knowledge hello` |
+| `message.argumentText` | ` hi` | ` hello` |
+| `message.annotations[0].type` | `USER_MENTION` | `SLASH_COMMAND` |
+| Handled by | `_handle_mention` | `_handle_command` |
+
+- `space` and `message` have the same shape in both, so the same `ChatSpace` / `ChatMessage` models are used.
+- A slash command arrives only as `appCommandPayload`; it is not also sent as a mention.
+- `appCommandId` is the ID registered for the command in the Chat API console. Google sends it as a float (`1.0`); the model reads it as an int. When more commands exist, route on this ID, not on the command text.
+- If both keys were ever present, the mention wins.
 
 # How the request is verified
 
@@ -48,7 +68,12 @@ Each event carries `authorizationEventObject.systemIdToken`, an RS256 ID token s
 The endpoint enqueues only the `chat` part of the event, exactly as Google sent it. The ID token is never written to Redis.
 
 - Task: `process_chat_event(chat, trace_id)` in `app/tasks/google_chat.py`. It validates the payload into `ChatPayload`, then runs `handle_event` in `app/services/google_chat.py`.
-- `handle_event` currently logs `google chat message space=... sender=... text=...`. The text is `argumentText` (what follows the @mention) stripped of its leading space, or the full text if there is none. Ingesting messages into the RAG pipeline is a later ticket and plugs in here.
+- `handle_event` only decides the event kind and delegates to a private handler; each handler does its own logging.
+  - `_handle_mention` logs `google chat message space=... sender=... text=...`.
+  - `_handle_command` logs `google chat command id=... space=... sender=... text=...`.
+  - In both, the text is `argumentText` (what follows the @mention or the command name) stripped of its leading space, or the full text if there is none.
+  - An event with neither payload is ignored.
+- Ingesting messages and `/add-knowledge` content into the RAG pipeline is a later ticket and plugs into these two handlers.
 - The request's trace id is passed to the task, so worker log lines carry the same `trace_id` as the request. The job name is `process_chat_event`.
 - Tasks are acknowledged late, so a task can run twice, and Google also retries failed events. Anything the task does later must be idempotent; the message `name` (for example `spaces/AAA/messages/BBB`) is the natural dedup key.
 - Payload models (`app/schemas/google_chat.py`) use camelCase aliases and keep unknown fields, so new fields from Google do not break parsing. A DM has no space `displayName` and no mention annotations; both are optional.
@@ -89,14 +114,15 @@ The API and the worker are separate processes, and both need Redis (rate limiter
 2. Expose port 8000 with ngrok or cloudflared, for example `ngrok http 8000`.
 3. Set the Chat API console endpoint URL to `https://<tunnel-host>/ingest/google-chat` and `GOOGLE_CHAT_AUDIENCE` in `.env` to the same URL. Restart the API after changing `.env`.
 4. @mention the app in a space, or message it in a DM. It replies "Got it" immediately, and the worker log (not the API log) shows the event with the request's trace id.
-5. Check that unauthenticated callers are refused:
+5. To test slash commands, register `/add-knowledge` in the Chat API console (Configuration → Commands, command ID 1), then run `/add-knowledge hello` in a space. The worker log shows `google chat command id=1 ... text='hello'`.
+6. Check that unauthenticated callers are refused:
 
        curl -X POST https://<tunnel-host>/ingest/google-chat \
          -H 'Content-Type: application/json' \
          -d '{"authorizationEventObject":{"systemIdToken":"x"}}'
 
    Expected: 401.
-6. Set `GOOGLE_CHAT_AUDIENCE` to a different URL, restart, and @mention again. The app does not reply and the API log shows a rejected event.
+7. Set `GOOGLE_CHAT_AUDIENCE` to a different URL, restart, and @mention again. The app does not reply and the API log shows a rejected event.
 
 Free ngrok URLs and the audience must stay in step: a new tunnel host means updating both the console and `.env`.
 
@@ -115,4 +141,4 @@ The global per-IP `rate_limit` dependency applies to this endpoint too (default 
 
 # Tests
 
-No test makes a network call. Tokens are signed with a throwaway RSA key, and Google's certs endpoint is replaced by `httpx.MockTransport` (`tests/google_chat_helpers.py`, fixtures in `tests/conftest.py`). Two real captured events, a space message and a DM, are stored sanitized in `tests/fixtures/` and drive the endpoint tests. The test client does not run the app lifespan, so tests override `get_google_verifier`.
+No test makes a network call. Tokens are signed with a throwaway RSA key, and Google's certs endpoint is replaced by `httpx.MockTransport` (`tests/google_chat_helpers.py`, fixtures in `tests/conftest.py`). Three real captured events, a space message, a DM and a slash command (`google-slash-command.json`), are stored sanitized in `tests/fixtures/` and drive the endpoint and worker tests. The test client does not run the app lifespan, so tests override `get_google_verifier`.
