@@ -8,7 +8,7 @@ dev: ## Start the dev server with reload
 	uv run uvicorn app.main:app --reload
 
 worker: ## Start the Celery worker
-	uv run celery -A app.core.celery_app worker -l info
+	uv run celery -A app.core.celery_app worker -l info --pool=solo
 
 migrate: ## Run migrations
 	uv run alembic upgrade head
