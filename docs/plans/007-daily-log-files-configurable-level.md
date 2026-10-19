@@ -35,6 +35,7 @@ Logs go only to stderr (`app/core/logger.py`). We want them in files too, one fi
 ```python
 from typing import Literal
 
+
 class Settings(BaseSettings):
     ...
     debug: bool = False

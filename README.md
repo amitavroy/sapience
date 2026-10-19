@@ -6,6 +6,7 @@ Async FastAPI starter managed with [uv](https://docs.astral.sh/uv/): SQLAlchemy 
 
 ```sh
 uv sync                              # install deps (Python 3.12 is fetched by uv)
+uv run pre-commit install            # git hook: ruff + pytest on every commit
 cp .env.example .env                 # then adjust values
 docker compose up -d                 # Postgres (pgvector) + Redis for local dev
 uv run alembic upgrade head          # apply migrations
@@ -25,7 +26,7 @@ Migrations: add a model, import it in `app/models/__init__.py`, then
 Docker image: `docker build -t fastapi . && docker run --env-file .env -p 8000:8000 fastapi`
 (`DATABASE_URL` and `REDIS_URL` must be reachable from the container).
 
-Optional: `uv run pre-commit install` to run ruff on every commit.
+The pre-commit hook runs `ruff check --fix`, `ruff format` (Python files and Python code blocks in Markdown) and `pytest`. CI runs the same ruff checks, so a clone without the hook can pass locally and fail CI. Check everything once with `uv run pre-commit run --all-files`.
 
 ## Auth
 
