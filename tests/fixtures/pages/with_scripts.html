@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <title>Scripts page</title>
+  <script>var headSecret = "HEAD_SCRIPT";</script>
+  <script src="https://cdn.example.test/app.js"></script>
+  <style>.x { color: STYLE_TEXT; }</style>
+</head>
+<body>
+  <!-- COMMENT_TEXT -->
+  <script>var bodySecret = "BODY_SCRIPT";</script>
+  <script src="/bundle.js"></script>
+  <noscript>NOSCRIPT_TEXT</noscript>
+  <p>Visible before</p>
+  <div aria-hidden="true">ARIA_HIDDEN_TEXT</div>
+  <div hidden>HIDDEN_ATTR_TEXT</div>
+  <select><option>OPTION_TEXT</option></select>
+  <button>BUTTON_TEXT</button>
+  <p>Visible after</p>
+</body>
+</html>

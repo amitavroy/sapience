@@ -254,4 +254,5 @@ def extract(page: FetchedPage) -> ExtractedDocument:
 
 async def extract_url(client: httpx.AsyncClient, url: str) -> ExtractedDocument:
     page = await fetch_page(client, url)
+    # SYNC-EXCEPTION: selectolax has no async API; parsing runs via asyncio.to_thread in the worker
     return await asyncio.to_thread(extract, page)

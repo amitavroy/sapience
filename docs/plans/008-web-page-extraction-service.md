@@ -12,8 +12,8 @@ Each slice ends in a working, reviewable state. Pause for review after each slic
 | 1 | End-to-end skeleton | `app/services/web_extractor.py`: single fetch (stream, size cap, content type, charset decoding), noise stripping, block walk emitting paragraphs, `EMPTY_CONTENT` | [x] |
 | 1 | End-to-end skeleton | `app/tasks/crawler.py`: `crawl_url` task logging a summary (INFO) and the full JSON (DEBUG); register it in `celery_app.include` | [x] |
 | 1 | End-to-end skeleton | `app/cli/__main__.py`: `crawl-url <url>` command that enqueues the task | [x] |
-| 1 | End-to-end skeleton | `SYNC-EXCEPTION` comment and a row in `docs/architecture/index.md` | [ ] |
-| 1 | End-to-end skeleton | Tests and fixtures: `with_scripts`, `plain_markup`, `javascript_app`, `empty_body`, `latin1_meta_charset`; size cap, content type; CLI enqueues; task logs the summary | [ ] |
+| 1 | End-to-end skeleton | `SYNC-EXCEPTION` comment and a row in `docs/architecture/index.md` | [x] |
+| 1 | End-to-end skeleton | Tests and fixtures: `with_scripts`, `plain_markup`, `javascript_app`, `empty_body`, `latin1_meta_charset`; size cap, content type; CLI enqueues; task logs the summary | [x] |
 | 2 | Failures and retries | `ExtractionError` with `reason`, `status_code` and `retryable`. 500, timeouts and connection errors are retryable; all other 4xx and 5xx are not | [ ] |
 | 2 | Failures and retries | Task retries retryable errors after 3 s, 5 s and 15 s (3 retries); permanent and exhausted failures logged at WARNING | [ ] |
 | 2 | Failures and retries | Tests: 500 then success, 404 and 503 not retried, retries exhausted, timeout retried, logged lines | [ ] |
