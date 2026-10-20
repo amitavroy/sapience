@@ -31,6 +31,14 @@ NOISE_TAGS = frozenset(
 )
 # emitted once, whole, and not recursed into
 BLOCK_TAGS = frozenset("h1 h2 h3 h4 h5 h6 p figcaption ul ol table pre blockquote".split())
+# page chrome, removed with its contents. header and footer only count as chrome at page level:
+# inside article, section or main they are scoped to that content (an article header holds its h1)
+CHROME_TAGS = frozenset({"nav", "aside"})
+SCOPED_CHROME_TAGS = frozenset({"header", "footer"})
+# the same declarations made with ARIA roles on any element
+CHROME_ROLES = frozenset({"navigation", "complementary"})
+SCOPED_CHROME_ROLES = frozenset({"banner", "contentinfo"})
+CONTENT_ROOT_TAGS = frozenset({"article", "section", "main"})
 HEADING_LEVELS = {f"h{n}": n for n in range(1, 7)}
 LIST_TAGS = frozenset({"ul", "ol"})
 INLINE_TAGS = frozenset(
@@ -160,10 +168,15 @@ def _collapse(text: str) -> str:
     return " ".join(text.split())
 
 
-def _is_skipped(node: LexborNode) -> bool:
-    if node.tag in NOISE_TAGS:
+def _is_skipped(node: LexborNode, in_content: bool = False) -> bool:
+    if node.tag in NOISE_TAGS or node.tag in CHROME_TAGS:
         return True
     attrs = node.attributes
+    role = (attrs.get("role") or "").strip().lower()
+    if role in CHROME_ROLES:
+        return True
+    if not in_content and (node.tag in SCOPED_CHROME_TAGS or role in SCOPED_CHROME_ROLES):
+        return True
     return "hidden" in attrs or attrs.get("aria-hidden") == "true"
 
 
@@ -179,7 +192,7 @@ def _text_of(node: LexborNode, exclude: frozenset[str] = frozenset()) -> str:
                 parts.append(child.text_content or "")
             elif tag.startswith("-"):  # comments and other non-element nodes
                 pass
-            elif not _is_skipped(child):
+            elif not _is_skipped(child, in_content=True):
                 spaced = tag == "br" or tag not in INLINE_TAGS
                 if spaced:
                     parts.append(" ")
@@ -203,7 +216,7 @@ def _raw_text(node: LexborNode) -> str:
             parts.append(child.text_content or "")
         elif tag == "br":
             parts.append("\n")
-        elif not tag.startswith("-") and not _is_skipped(child):
+        elif not tag.startswith("-") and not _is_skipped(child, in_content=True):
             parts.append(_raw_text(child))
         child = child.next
     return "".join(parts)
@@ -213,7 +226,7 @@ def _children(node: LexborNode, tags: frozenset[str]) -> list[LexborNode]:
     found = []
     child = node.child
     while child is not None:
-        if child.tag in tags and not _is_skipped(child):
+        if child.tag in tags and not _is_skipped(child, in_content=True):
             found.append(child)
         child = child.next
     return found
@@ -301,13 +314,13 @@ def _extract_links(tree: LexborHTMLParser, source_uri: str) -> list[Link]:
     source_host = _bare_host(source_uri)
     found: dict[str, Link] = {}
 
-    def visit(parent: LexborNode) -> None:
+    def visit(parent: LexborNode, in_content: bool) -> None:
         child = parent.child
         while child is not None:
-            if not child.tag.startswith("-") and not _is_skipped(child):
+            if not child.tag.startswith("-") and not _is_skipped(child, in_content):
                 if child.tag == "a":
                     add(child)
-                visit(child)
+                visit(child, in_content or child.tag in CONTENT_ROOT_TAGS)
             child = child.next
 
     def add(anchor: LexborNode) -> None:
@@ -325,11 +338,11 @@ def _extract_links(tree: LexborHTMLParser, source_uri: str) -> list[Link]:
         found[href] = Link(href=href, text=text, internal=_bare_host(href) == source_host)
 
     if tree.body is not None:
-        visit(tree.body)
+        visit(tree.body, in_content=False)
     return list(found.values())
 
 
-def _walk_blocks(parent: LexborNode, blocks: list[Block]) -> None:
+def _walk_blocks(parent: LexborNode, blocks: list[Block], in_content: bool = False) -> None:
     """Block elements are emitted whole; containers are recursed; loose inline text is gathered."""
     loose: list[str] = []
 
@@ -343,7 +356,7 @@ def _walk_blocks(parent: LexborNode, blocks: list[Block]) -> None:
         tag = child.tag
         if tag == "-text":
             loose.append(child.text_content or "")
-        elif tag.startswith("-") or _is_skipped(child):
+        elif tag.startswith("-") or _is_skipped(child, in_content):
             pass
         elif tag in BLOCK_TAGS:
             flush()
@@ -352,7 +365,7 @@ def _walk_blocks(parent: LexborNode, blocks: list[Block]) -> None:
             loose.append(" " if tag == "br" else _text_of(child))
         else:
             flush()
-            _walk_blocks(child, blocks)
+            _walk_blocks(child, blocks, in_content or tag in CONTENT_ROOT_TAGS)
         child = child.next
     flush()
 

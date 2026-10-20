@@ -24,7 +24,7 @@ Each slice ends in a working, reviewable state. Pause for review after each slic
 | 4 | Typed blocks and sections | Tests and fixtures: `structured`, `nested_blocks` (no duplicated or lost text), skipped heading levels, pre-heading content | [x] |
 | 5 | Links and hash | `links` (absolute, filtered, deduped, internal flag, `<base href>`), `content_hash` over the normalised text | [x] |
 | 5 | Links and hash | Tests: link rules, hash stable across markup changes, changes with text | [x] |
-| 6 | Tune on real pages | Run `crawl-url` on a few real static sites with `LOG_FILE_LEVEL=DEBUG`, review the JSON together, adjust the structure | [ ] |
+| 6 | Tune on real pages | Run `crawl-url` on a few real static sites with `LOG_FILE_LEVEL=DEBUG`, review the JSON together, adjust the structure | [x] |
 | 7 | Docs | Wiki entry: the CLI command, the task, the output structure, rate limit, robots.txt and limits; note the new dependency | [ ] |
 
 ## Context
@@ -138,6 +138,7 @@ Codebase facts that shape the design:
 18. **Noise removed from the body before the walk:**
     - Tags removed with their contents: `script`, `style`, `noscript`, `template`, `iframe`, `svg`, `canvas`, `link`, `meta`, `input`, `select`, `option`, `textarea` and `button`.
     - Any element with a `hidden` attribute or `aria-hidden="true"`.
+    - Page chrome, with its contents: `nav` and `aside` always, and `header` and `footer` unless they sit inside an `article`, `section` or `main`. An article `header` holds its title, so scoped ones stay. A `footer` inside a `blockquote` (attribution) also stays. Found in slice 6: whole-body kept menus, language lists and footers in the output.
     - HTML comments (a test proves comment text never reaches the output).
     - `<form>` itself is **not** removed, only its controls. Some sites (ASP.NET, for example) wrap the whole page in one form.
     - Inline `style="display:none"` and CSS-class hiding are not detected, which is a known limit.
@@ -150,7 +151,7 @@ Codebase facts that shape the design:
       - `table` → `table`. Its `rows` are the `th` and `td` text per `tr`.
       - `pre` → `code`.
       - `blockquote` → `quote`, whose text includes any `<p>` children.
-    - **Containers are recursed into:** `div`, `section`, `article`, `main`, `header`, `footer`, `nav`, `aside`, `figure`, `form`, `dl`, `details`, and any unknown tag.
+    - **Containers are recursed into:** `div`, `section`, `article`, `main`, `header` and `footer` (inside content only, see decision 18), `figure`, `form`, `dl`, `details`, and any unknown tag.
       - Between block children, runs of inline content (bare text, `a`, `span`, `strong`, `em`, inline `code`, `br`, and so on) are gathered into a `paragraph`.
       - `dt` and `dd` text is gathered the same way.
     - **Whitespace:**
@@ -163,7 +164,7 @@ Codebase facts that shape the design:
     - Skipped levels (an `h1` followed directly by an `h3`) simply nest.
     - A second `h1` resets the path.
     - Content before the first heading forms a section with `heading_path = []`.
-    - Headings inside navigation or the footer also create sections. This is accepted for now, in line with the whole-body decision.
+    - Page chrome (decision 18) never reaches the walk, so it creates no sections.
 21. **`title`** falls back through `<title>`, then `og:title`, then the first `h1` block, then `source_uri`. It is a top-level field and never empty, because `Document.title` is required.
 22. **Empty content.** If the walk produces no blocks, the service raises `EMPTY_CONTENT` and the task logs it at WARNING. JS-rendered shells (an empty `<div id="root">` plus scripts) hit this case. Without it, every empty page would share one hash and collide on `(collection_id, content_hash)` once we persist.
 
@@ -200,7 +201,7 @@ Codebase facts that shape the design:
     - Before hashing, the text is Unicode NFC-normalised and encoded as UTF-8.
     - The result is always 64 characters and fits `String(64)`. It costs a few milliseconds even for 5 MB.
     - Changing the walk or the `text()` format changes every hash. That is acceptable before persistence exists, but must be noted as a breaking change afterwards.
-    - Known effect: a footer that changes (the year, "latest posts") changes the hash. That is accepted with the whole-body decision.
+    - A changing footer (the year, "latest posts") no longer changes the hash, because page-level footers are removed (decision 18). A changing sidebar or in-article footer still does.
 
 ### Later tickets (recorded here)
 
@@ -467,5 +468,5 @@ All tests use `httpx.MockTransport` and fixture files, with no network access an
 - Known limits:
   - JS-rendered pages raise `EMPTY_CONTENT`.
   - Inline `display:none` and CSS-hidden content are not detected.
-  - Navigation and footer text is included in blocks and the hash.
+  - Chrome that is not marked up semantically (a `div class="sidebar"`, a `div class="related"`) is still included in blocks and the hash.
   - Only the robots.txt `*` group is honoured.

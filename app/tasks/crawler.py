@@ -27,12 +27,10 @@ def crawl_url(self, url: str, trace_id: str, attempt: int = 0, requeues: int = 0
             raise self.retry(
                 # jitter keeps many queued tasks for one host from retrying in lockstep
                 countdown=random.uniform(1, 3),
-                kwargs={
-                    "url": url,
-                    "trace_id": trace_id,
-                    "attempt": attempt,
-                    "requeues": requeues + 1,
-                },
+                # url and trace_id go in args: delay() queued them positionally, and passing
+                # them as kwargs too fails with "multiple values for argument"
+                args=(url, trace_id),
+                kwargs={"attempt": attempt, "requeues": requeues + 1},
             ) from None
         except web_extractor.ExtractionError as exc:
             if exc.retryable and attempt < len(RETRY_DELAYS):
@@ -41,12 +39,8 @@ def crawl_url(self, url: str, trace_id: str, attempt: int = 0, requeues: int = 0
                 # raised here, outside asyncio.run, so the task goes back on the queue
                 raise self.retry(
                     countdown=delay,
-                    kwargs={
-                        "url": url,
-                        "trace_id": trace_id,
-                        "attempt": attempt + 1,
-                        "requeues": requeues,
-                    },
+                    args=(url, trace_id),
+                    kwargs={"attempt": attempt + 1, "requeues": requeues},
                 ) from exc
             logger.warning(
                 "crawl failed for {}: {} (status {}, attempts {})",

@@ -402,3 +402,63 @@ async def test_hash_ignores_title_and_metadata() -> None:
     two = await extract_html("<title>Two</title><meta name=description content=b><p>Same</p>")
 
     assert one.content_hash == two.content_hash
+
+
+async def test_page_level_navigation_and_chrome_are_removed() -> None:
+    doc = await extract_html(
+        """
+        <header><p>SITE_HEADER</p><nav><a href="/menu">MENU_LINK</a></nav></header>
+        <aside><p>SIDEBAR_TEXT</p><a href="/side">side</a></aside>
+        <main><p>Real content</p></main>
+        <footer><p>SITE_FOOTER</p><a href="/legal">legal</a></footer>
+        """
+    )
+
+    assert [b.text for b in doc.blocks] == ["Real content"]
+    assert doc.links == []
+
+
+async def test_header_and_footer_inside_content_are_kept() -> None:
+    doc = await extract_html(
+        """
+        <nav><a href="/menu">menu</a></nav>
+        <article>
+          <header><h1>Article title</h1><p>By the author</p></header>
+          <p>Body text</p>
+          <footer><a href="/tags">Tagged</a></footer>
+        </article>
+        <blockquote><p>Quoted</p><footer>Attribution</footer></blockquote>
+        """
+    )
+
+    assert [b.text for b in doc.blocks if b.type != "quote"] == [
+        "Article title",
+        "By the author",
+        "Body text",
+        "Tagged",
+    ]
+    assert doc.blocks[-1].text == "Quoted Attribution"
+    assert [link.href for link in doc.links] == ["https://a.test/tags"]
+    assert doc.title == "Article title"
+
+
+async def test_page_with_only_navigation_is_empty_content() -> None:
+    with pytest.raises(ExtractionError) as exc:
+        await extract_html('<nav><a href="/a">A</a></nav><footer>Footer</footer>')
+
+    assert exc.value.reason is ExtractionErrorReason.EMPTY_CONTENT
+
+
+async def test_aria_landmark_roles_are_treated_like_the_matching_tags() -> None:
+    doc = await extract_html(
+        """
+        <div role="banner"><p>BANNER_TEXT</p></div>
+        <div role="navigation"><a href="/menu">NAV_TEXT</a></div>
+        <div role="complementary"><p>ASIDE_TEXT</p></div>
+        <div role="contentinfo"><p>INFO_TEXT</p></div>
+        <article><div role="banner"><p>Scoped banner</p></div><p>Body</p></article>
+        """
+    )
+
+    assert [b.text for b in doc.blocks] == ["Scoped banner", "Body"]
+    assert doc.links == []

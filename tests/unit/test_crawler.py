@@ -88,8 +88,11 @@ def retries(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
     """Record task.retry calls instead of talking to a broker; raises Retry like the real one."""
     calls: list[dict] = []
 
-    def fake_retry(*, countdown: int, kwargs: dict) -> None:
-        calls.append({"countdown": countdown, **kwargs})
+    def fake_retry(*, countdown: int, args: tuple, kwargs: dict) -> None:
+        # like Celery, the retried call is args + kwargs, so none of them may repeat
+        assert set(kwargs) == {"attempt", "requeues"}
+        url, trace_id = args
+        calls.append({"countdown": countdown, "url": url, "trace_id": trace_id, **kwargs})
         raise Retry()
 
     monkeypatch.setattr(crawler_tasks.crawl_url, "retry", fake_retry)

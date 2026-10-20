@@ -53,7 +53,9 @@ async def _fetch_robots(client: httpx.AsyncClient, origin: str, host: str) -> Ro
             follow_redirects=True,
         )
     except httpx.TransportError as exc:
-        logger.warning("robots.txt unreachable for {} ({}): treating as disallowed", host, exc)
+        logger.warning(
+            "robots.txt unreachable for {} ({}): treating as disallowed", host, type(exc).__name__
+        )
         parser.disallow_all = True
         return parser
     if response.status_code >= 500:
