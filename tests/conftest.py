@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-not-for-production-use")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")  # never connected
+os.environ.setdefault("LOG_FILE_LEVEL", "")  # tests never write to logs/
 
 from app.core.config import settings  # noqa: E402
 from app.core.deps import get_db  # noqa: E402

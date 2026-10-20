@@ -1,4 +1,5 @@
 import ipaddress
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -8,6 +9,10 @@ class Settings(BaseSettings):
 
     app_name: str = "fastapi"
     debug: bool = False
+    log_dir: str = "logs"
+    # lowest level written to the daily log file; empty = no file logging
+    log_file_level: Literal["", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = ""
+    log_file_retention_days: int = 14  # 0 = keep forever
     database_url: str
     redis_url: str
     celery_broker_url: str = "redis://localhost:6379/1"  # own Redis DB, apart from the limiter

@@ -9,6 +9,9 @@ __pycache__/
 # Env
 .env
 
+# Daily log files
+logs/
+
 # OS / editor
 .DS_Store
 .idea/

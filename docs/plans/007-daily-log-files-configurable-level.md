@@ -6,10 +6,10 @@ Each slice ends in a working, reviewable state. Pause for review after each slic
 
 | # | Slice | Step | Done |
 |---|-------|------|------|
-| 1 | File sink | `log_dir`, `log_file_level`, `log_file_retention_days` settings in `app/core/config.py` | [ ] |
-| 1 | File sink | `logger.py`: `_PLAIN_FORMAT`, `add_file_sink()`, called when `log_file_level` is set | [ ] |
-| 1 | File sink | `tests/unit/test_file_logging.py`: threshold, date filename, JSON mode | [ ] |
-| 2 | Config housekeeping | `.env.example` entries, `logs/` in `.gitignore`, `LOG_FILE_LEVEL=""` default in `tests/conftest.py` | [ ] |
+| 1 | File sink | `log_dir`, `log_file_level`, `log_file_retention_days` settings in `app/core/config.py` | [x] |
+| 1 | File sink | `logger.py`: `_PLAIN_FORMAT`, `add_file_sink()`, called when `log_file_level` is set | [x] |
+| 1 | File sink | `tests/unit/test_file_logging.py`: threshold, date filename, JSON mode | [x] |
+| 2 | Config housekeeping | `.env.example` entries, `logs/` in `.gitignore`, `LOG_FILE_LEVEL=""` default in `tests/conftest.py` | [x] |
 | 3 | Docs | Wiki "Logging and trace id": file sink bullets (path, threshold, retention, off by default, format, Docker volume note) | [ ] |
 
 ## Context
