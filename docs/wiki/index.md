@@ -97,3 +97,7 @@ When a row is deleted:
 # Google Chat webhook
 
 Google Chat @mentions and slash commands arrive at `POST /ingest/google-chat`. The endpoint verifies Google's ID token (401 on failure), replies "Got it" straight away, and queues the event for a Celery worker, which handles mentions and slash commands separately. Setup, env vars, event kinds and local testing: [google-bot.md](google-bot.md).
+
+# Web page crawl
+
+`uv run python -m app.cli crawl-url <url>` queues a crawl of one web page. A Celery worker checks robots.txt, waits for the per-host rate limit, fetches the page, extracts structured content (blocks, sections, links, hash) and logs a summary. Nothing is persisted yet. Command, output structure, politeness, retries, settings and limits: [web-crawl.md](web-crawl.md).

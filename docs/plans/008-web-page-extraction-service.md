@@ -25,7 +25,7 @@ Each slice ends in a working, reviewable state. Pause for review after each slic
 | 5 | Links and hash | `links` (absolute, filtered, deduped, internal flag, `<base href>`), `content_hash` over the normalised text | [x] |
 | 5 | Links and hash | Tests: link rules, hash stable across markup changes, changes with text | [x] |
 | 6 | Tune on real pages | Run `crawl-url` on a few real static sites with `LOG_FILE_LEVEL=DEBUG`, review the JSON together, adjust the structure | [x] |
-| 7 | Docs | Wiki entry: the CLI command, the task, the output structure, rate limit, robots.txt and limits; note the new dependency | [ ] |
+| 7 | Docs | Wiki entry: the CLI command, the task, the output structure, rate limit, robots.txt and limits; note the new dependency | [x] |
 
 ## Context
 
@@ -409,7 +409,7 @@ def crawl_url(url: str) -> None:
 | `tests/unit/test_crawler.py` (new) | 1, 2, 3 | Task, retries, rate limit, robots tests |
 | `tests/unit/test_cli_crawl.py` (new) | 1 | CLI tests |
 | `tests/fixtures/pages/*.html` (new) | 1, 4 | HTML samples |
-| `docs/wiki/index.md` | 7 | Crawl command, task, output, limits |
+| `docs/wiki/web-crawl.md` (new), `docs/wiki/index.md` | 7 | Crawl command, task, output, limits; the index links to it |
 
 ## Testing plan
 
