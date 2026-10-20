@@ -65,7 +65,7 @@ def test_success_logs_the_summary_at_info_and_the_json_at_debug(logs: list[dict]
     [summary] = [r for r in logs if r["level"].name == "INFO"]
     assert summary["message"].startswith("crawled https://a.test/p source_uri=https://a.test/p")
     assert "title='Scripts page'" in summary["message"]
-    assert "blocks=2" in summary["message"]
+    assert "blocks=2 sections=1 links=0 text_length=" in summary["message"]
     assert summary["extra"] == {"trace_id": "trace1234", "job": "crawl_url"}
     [debug] = [r for r in logs if r["level"].name == "DEBUG"]
     assert debug["message"].startswith("extracted document: {")

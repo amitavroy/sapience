@@ -63,13 +63,15 @@ def crawl_url(self, url: str, trace_id: str, attempt: int = 0, requeues: int = 0
 
         duration_ms = round((time.monotonic() - started) * 1000)
         logger.info(
-            "crawled {} source_uri={} status={} title={!r} blocks={} text_length={} "
-            "content_hash={} duration_ms={}",
+            "crawled {} source_uri={} status={} title={!r} blocks={} sections={} links={} "
+            "text_length={} content_hash={} duration_ms={}",
             url,
             doc.source_uri,
             doc.status_code,
             doc.title,
             len(doc.blocks),
+            len(doc.sections),
+            len(doc.links),
             len(doc.text()),
             doc.content_hash,
             duration_ms,

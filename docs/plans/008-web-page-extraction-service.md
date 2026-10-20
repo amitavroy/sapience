@@ -22,8 +22,8 @@ Each slice ends in a working, reviewable state. Pause for review after each slic
 | 3 | Politeness | Tests: limited then allowed re-queues without using a failure retry; robots allow, disallow, 404 and 5xx cases | [x] |
 | 4 | Typed blocks and sections | Heading, list, table, code, quote block types; `figcaption`; `sections` as index ranges with `heading_path`; `title` fallback | [x] |
 | 4 | Typed blocks and sections | Tests and fixtures: `structured`, `nested_blocks` (no duplicated or lost text), skipped heading levels, pre-heading content | [x] |
-| 5 | Links and hash | `links` (absolute, filtered, deduped, internal flag, `<base href>`), `content_hash` over the normalised text | [ ] |
-| 5 | Links and hash | Tests: link rules, hash stable across markup changes, changes with text | [ ] |
+| 5 | Links and hash | `links` (absolute, filtered, deduped, internal flag, `<base href>`), `content_hash` over the normalised text | [x] |
+| 5 | Links and hash | Tests: link rules, hash stable across markup changes, changes with text | [x] |
 | 6 | Tune on real pages | Run `crawl-url` on a few real static sites with `LOG_FILE_LEVEL=DEBUG`, review the JSON together, adjust the structure | [ ] |
 | 7 | Docs | Wiki entry: the CLI command, the task, the output structure, rate limit, robots.txt and limits; note the new dependency | [ ] |
 

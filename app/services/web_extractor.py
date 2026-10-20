@@ -6,13 +6,13 @@ import unicodedata
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
-from urllib.parse import urlsplit
+from urllib.parse import urldefrag, urljoin, urlsplit
 
 import httpx
 from selectolax.lexbor import LexborHTMLParser, LexborNode
 
 from app.core.config import settings
-from app.schemas.extracted_document import Block, ExtractedDocument, Section
+from app.schemas.extracted_document import Block, ExtractedDocument, Link, Section
 
 # only a plain 500 for now; gateway errors (502-504) are the first candidates to add
 RETRYABLE_STATUS_CODES = frozenset({500})
@@ -289,6 +289,46 @@ def _build_sections(blocks: list[Block]) -> list[Section]:
     return sections
 
 
+def _bare_host(url: str) -> str:
+    host = (urlsplit(url).hostname or "").lower()
+    return host.removeprefix("www.")
+
+
+def _extract_links(tree: LexborHTMLParser, source_uri: str) -> list[Link]:
+    """Absolute http(s) links from the visible body, fragments stripped, deduped by href."""
+    base_node = tree.css_first("head base[href]")
+    base = urljoin(source_uri, base_node.attributes["href"] or "") if base_node else source_uri
+    source_host = _bare_host(source_uri)
+    found: dict[str, Link] = {}
+
+    def visit(parent: LexborNode) -> None:
+        child = parent.child
+        while child is not None:
+            if not child.tag.startswith("-") and not _is_skipped(child):
+                if child.tag == "a":
+                    add(child)
+                visit(child)
+            child = child.next
+
+    def add(anchor: LexborNode) -> None:
+        raw = (anchor.attributes.get("href") or "").strip()
+        if not raw or raw.startswith("#"):
+            return
+        href, _ = urldefrag(urljoin(base, raw))
+        if urlsplit(href).scheme not in ("http", "https"):
+            return
+        text = _text_of(anchor)
+        if existing := found.get(href):
+            if not existing.text:
+                existing.text = text
+            return
+        found[href] = Link(href=href, text=text, internal=_bare_host(href) == source_host)
+
+    if tree.body is not None:
+        visit(tree.body)
+    return list(found.values())
+
+
 def _walk_blocks(parent: LexborNode, blocks: list[Block]) -> None:
     """Block elements are emitted whole; containers are recursed; loose inline text is gathered."""
     loose: list[str] = []
@@ -368,6 +408,7 @@ def extract(page: FetchedPage) -> ExtractedDocument:
         metadata=metadata,
         blocks=blocks,
         sections=_build_sections(blocks),
+        links=_extract_links(tree, page.final_url),
     )
     normalised = unicodedata.normalize("NFC", document.text())
     document.content_hash = hashlib.sha256(normalised.encode("utf-8")).hexdigest()

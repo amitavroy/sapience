@@ -28,6 +28,12 @@ class Section(BaseModel):
     end: int
 
 
+class Link(BaseModel):
+    href: str  # absolute, no fragment
+    text: str
+    internal: bool
+
+
 class ExtractedDocument(BaseModel):
     source_uri: str  # final URL after redirects
     title: str
@@ -39,6 +45,7 @@ class ExtractedDocument(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)  # description, language, canonical_url
     blocks: list[Block]
     sections: list[Section] = Field(default_factory=list)
+    links: list[Link] = Field(default_factory=list)  # web only
 
     def text(self) -> str:
         return "\n\n".join(block.text_form() for block in self.blocks)

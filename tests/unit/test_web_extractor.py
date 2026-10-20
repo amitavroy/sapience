@@ -297,3 +297,108 @@ async def test_title_falls_back_through_og_h1_and_the_url(html: bytes, title: st
     doc = await extract_from(lambda _: httpx.Response(200, content=html, headers=HTML))
 
     assert doc.title == title
+
+
+async def extract_html(html: str, url: str = "https://a.test/dir/page"):
+    return await extract_from(
+        lambda _: httpx.Response(200, content=html.encode(), headers=HTML), url
+    )
+
+
+async def test_relative_links_resolve_against_the_page_url() -> None:
+    doc = await extract_html(
+        '<a href="next">Next</a> <a href="/root">Root</a> <a href="../up">Up</a>'
+    )
+
+    assert [link.href for link in doc.links] == [
+        "https://a.test/dir/next",
+        "https://a.test/root",
+        "https://a.test/up",
+    ]
+    assert [link.text for link in doc.links] == ["Next", "Root", "Up"]
+
+
+async def test_base_href_wins_over_the_page_url() -> None:
+    doc = await extract_html(
+        '<head><base href="https://cdn.test/docs/"></head><a href="intro">Intro</a>'
+    )
+
+    assert [link.href for link in doc.links] == ["https://cdn.test/docs/intro"]
+
+
+async def test_only_http_links_are_kept_and_fragments_are_stripped() -> None:
+    doc = await extract_html(
+        """
+        <a href="mailto:a@b.test">mail</a> <a href="tel:123">tel</a>
+        <a href="javascript:void(0)">js</a> <a href="data:text/plain,x">data</a>
+        <a href="#top">top</a> <a href="">empty</a> <a>no href</a>
+        <a href="/page#section">kept</a>
+        """
+    )
+
+    assert [link.href for link in doc.links] == ["https://a.test/page"]
+
+
+async def test_duplicate_links_are_merged_keeping_the_first_non_empty_text() -> None:
+    doc = await extract_html(
+        '<a href="/x"></a> <a href="/x#one">First text</a> <a href="/x">Second text</a>'
+    )
+
+    [link] = doc.links
+    assert (link.href, link.text) == ("https://a.test/x", "First text")
+
+
+async def test_www_counts_as_internal_but_other_subdomains_do_not() -> None:
+    doc = await extract_html(
+        """
+        <a href="https://www.a.test/w">www</a> <a href="https://A.TEST/u">upper</a>
+        <a href="https://blog.a.test/b">blog</a> <a href="https://other.test/o">other</a>
+        """
+    )
+
+    assert {link.text: link.internal for link in doc.links} == {
+        "www": True,
+        "upper": True,
+        "blog": False,
+        "other": False,
+    }
+
+
+async def test_links_in_removed_content_are_not_collected() -> None:
+    doc = await extract_html(
+        """
+        <a href="/kept">kept</a>
+        <div hidden><a href="/hidden">hidden</a></div>
+        <div aria-hidden="true"><a href="/aria">aria</a></div>
+        <noscript><a href="/noscript">noscript</a></noscript>
+        <script>var s = '<a href="/script">x</a>';</script>
+        """
+    )
+
+    assert [link.href for link in doc.links] == ["https://a.test/kept"]
+
+
+async def test_hash_is_stable_across_markup_changes() -> None:
+    plain = await extract_html("<h1>Title</h1><p>Hello   world</p>")
+    marked_up = await extract_html(
+        "<body><div><h1 class='x'>Title</h1></div>"
+        "<section><p>Hello <b>world</b></p></section></body>"
+    )
+
+    assert plain.content_hash == marked_up.content_hash
+    assert len(plain.content_hash) == 64
+    assert int(plain.content_hash, 16) >= 0  # hex
+
+
+async def test_hash_changes_with_a_one_word_change() -> None:
+    before = await extract_html("<p>Hello world</p>")
+    after = await extract_html("<p>Hello there</p>")
+
+    assert before.content_hash != after.content_hash
+
+
+async def test_hash_ignores_title_and_metadata() -> None:
+    one = await extract_html("<title>One</title><meta name=description content=a><p>Same</p>")
+    two = await extract_html("<title>Two</title><meta name=description content=b><p>Same</p>")
+
+    assert one.content_hash == two.content_hash
