@@ -12,7 +12,7 @@ import httpx
 from selectolax.lexbor import LexborHTMLParser, LexborNode
 
 from app.core.config import settings
-from app.schemas.extracted_document import Block, ExtractedDocument
+from app.schemas.extracted_document import Block, ExtractedDocument, Section
 
 # only a plain 500 for now; gateway errors (502-504) are the first candidates to add
 RETRYABLE_STATUS_CODES = frozenset({500})
@@ -29,8 +29,10 @@ NOISE_TAGS = frozenset(
     "script style noscript template iframe svg canvas link meta input select option textarea "
     "button".split()
 )
-# emitted once, whole, and not recursed into (slice 4 gives them their own types)
+# emitted once, whole, and not recursed into
 BLOCK_TAGS = frozenset("h1 h2 h3 h4 h5 h6 p figcaption ul ol table pre blockquote".split())
+HEADING_LEVELS = {f"h{n}": n for n in range(1, 7)}
+LIST_TAGS = frozenset({"ul", "ol"})
 INLINE_TAGS = frozenset(
     "a abbr b bdi bdo cite code data dfn em i kbd mark q s samp small span strong sub sup time "
     "u var wbr".split()
@@ -165,7 +167,7 @@ def _is_skipped(node: LexborNode) -> bool:
     return "hidden" in attrs or attrs.get("aria-hidden") == "true"
 
 
-def _text_of(node: LexborNode) -> str:
+def _text_of(node: LexborNode, exclude: frozenset[str] = frozenset()) -> str:
     """Text under node. Non-inline elements and <br> count as a space, so words don't merge."""
     parts: list[str] = []
 
@@ -181,13 +183,110 @@ def _text_of(node: LexborNode) -> str:
                 spaced = tag == "br" or tag not in INLINE_TAGS
                 if spaced:
                     parts.append(" ")
-                collect(child)
+                if tag not in exclude:
+                    collect(child)
                 if spaced:
                     parts.append(" ")
             child = child.next
 
     collect(node)
     return _collapse("".join(parts))
+
+
+def _raw_text(node: LexborNode) -> str:
+    """Text under node with its whitespace kept (code blocks); <br> is a newline."""
+    parts: list[str] = []
+    child = node.child
+    while child is not None:
+        tag = child.tag
+        if tag == "-text":
+            parts.append(child.text_content or "")
+        elif tag == "br":
+            parts.append("\n")
+        elif not tag.startswith("-") and not _is_skipped(child):
+            parts.append(_raw_text(child))
+        child = child.next
+    return "".join(parts)
+
+
+def _children(node: LexborNode, tags: frozenset[str]) -> list[LexborNode]:
+    found = []
+    child = node.child
+    while child is not None:
+        if child.tag in tags and not _is_skipped(child):
+            found.append(child)
+        child = child.next
+    return found
+
+
+def _list_items(list_node: LexborNode, depth: int = 0) -> list[str]:
+    """Item text per <li>; nested lists are flattened in, indented two spaces per level."""
+    items: list[str] = []
+    for li in _children(list_node, frozenset({"li"})):
+        if text := _text_of(li, exclude=LIST_TAGS):
+            items.append("  " * depth + text)
+        for nested in _children(li, LIST_TAGS):
+            items.extend(_list_items(nested, depth + 1))
+    return items
+
+
+def _table_rows(table: LexborNode) -> list[list[str]]:
+    rows: list[list[str]] = []
+    trs: list[LexborNode] = []
+    for part in _children(table, frozenset({"thead", "tbody", "tfoot", "tr"})):
+        trs.extend(_children(part, frozenset({"tr"})) if part.tag != "tr" else [part])
+    for tr in trs:
+        cells = [_text_of(cell) for cell in _children(tr, frozenset({"th", "td"}))]
+        if any(cells):
+            rows.append(cells)
+    return rows
+
+
+def _block_elements(node: LexborNode) -> list[Block]:
+    """The block(s) for one block element; empty ones are dropped."""
+    tag = node.tag
+    blocks: list[Block] = []
+    if tag in HEADING_LEVELS:
+        if text := _text_of(node):
+            blocks.append(Block(type="heading", text=text, level=HEADING_LEVELS[tag]))
+    elif tag in LIST_TAGS:
+        if items := _list_items(node):
+            blocks.append(Block(type="list", items=items))
+    elif tag == "table":
+        for caption in _children(node, frozenset({"caption"})):
+            if text := _text_of(caption):
+                blocks.append(Block(type="paragraph", text=text))
+        if rows := _table_rows(node):
+            blocks.append(Block(type="table", rows=rows))
+    elif tag == "pre":
+        if (text := _raw_text(node)).strip():
+            blocks.append(Block(type="code", text=text))
+    elif tag == "blockquote":
+        if text := _text_of(node):
+            blocks.append(Block(type="quote", text=text))
+    elif text := _text_of(node):  # p, figcaption
+        blocks.append(Block(type="paragraph", text=text))
+    return blocks
+
+
+def _build_sections(blocks: list[Block]) -> list[Section]:
+    """A section starts at each heading; heading_path comes from a stack of enclosing headings."""
+    sections: list[Section] = []
+    stack: list[tuple[int, str]] = []
+    start = 0
+    path: list[str] = []
+    for index, block in enumerate(blocks):
+        if block.type != "heading":
+            continue
+        if index > start:  # close the section before this heading (or the pre-heading content)
+            sections.append(Section(heading_path=path, start=start, end=index))
+        while stack and stack[-1][0] >= (block.level or 1):
+            stack.pop()
+        stack.append((block.level or 1, block.text))
+        path = [text for _, text in stack]
+        start = index
+    sections.append(Section(heading_path=path, start=start, end=len(blocks)))
+    return sections
 
 
 def _walk_blocks(parent: LexborNode, blocks: list[Block]) -> None:
@@ -208,8 +307,7 @@ def _walk_blocks(parent: LexborNode, blocks: list[Block]) -> None:
             pass
         elif tag in BLOCK_TAGS:
             flush()
-            if text := _text_of(child):
-                blocks.append(Block(type="paragraph", text=text))
+            blocks.extend(_block_elements(child))
         elif tag in INLINE_TAGS or tag == "br":
             loose.append(" " if tag == "br" else _text_of(child))
         else:
@@ -251,9 +349,11 @@ def extract(page: FetchedPage) -> ExtractedDocument:
         raise ExtractionError(ExtractionErrorReason.EMPTY_CONTENT, f"no content: {page.final_url}")
 
     title_node = tree.css_first("title")
+    first_h1 = next((b.text for b in blocks if b.type == "heading" and b.level == 1), "")
     title = (
         (_collapse(title_node.text()) if title_node else "")
         or metadata.get("og", {}).get("og:title", "")
+        or first_h1
         or page.final_url
     )
 
@@ -267,6 +367,7 @@ def extract(page: FetchedPage) -> ExtractedDocument:
         fetched_at=page.fetched_at,
         metadata=metadata,
         blocks=blocks,
+        sections=_build_sections(blocks),
     )
     normalised = unicodedata.normalize("NFC", document.text())
     document.content_hash = hashlib.sha256(normalised.encode("utf-8")).hexdigest()

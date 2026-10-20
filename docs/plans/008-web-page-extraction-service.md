@@ -20,7 +20,7 @@ Each slice ends in a working, reviewable state. Pause for review after each slic
 | 3 | Politeness | `app/services/crawler.py`: per-host rate limit (`crawler_rate_limit`, default `1/second`) via the Redis limiter; the task re-queues when limited | [x] |
 | 3 | Politeness | robots.txt check (RFC 9309 rules, `*` group), cached per host in the worker process; disallowed URLs skipped with a log line | [x] |
 | 3 | Politeness | Tests: limited then allowed re-queues without using a failure retry; robots allow, disallow, 404 and 5xx cases | [x] |
-| 4 | Typed blocks and sections | Heading, list, table, code, quote block types; `figcaption`; `sections` as index ranges with `heading_path`; `title` fallback | [ ] |
+| 4 | Typed blocks and sections | Heading, list, table, code, quote block types; `figcaption`; `sections` as index ranges with `heading_path`; `title` fallback | [x] |
 | 4 | Typed blocks and sections | Tests and fixtures: `structured`, `nested_blocks` (no duplicated or lost text), skipped heading levels, pre-heading content | [ ] |
 | 5 | Links and hash | `links` (absolute, filtered, deduped, internal flag, `<base href>`), `content_hash` over the normalised text | [ ] |
 | 5 | Links and hash | Tests: link rules, hash stable across markup changes, changes with text | [ ] |
