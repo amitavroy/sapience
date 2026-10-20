@@ -1,5 +1,6 @@
 import asyncio
 import uuid
+from urllib.parse import urlsplit
 
 import typer
 from sqlalchemy import text
@@ -10,6 +11,7 @@ from app.core.trace import trace_id
 from app.db.session import async_session_factory, engine
 from app.schemas.user import UserCreate
 from app.services import user as user_service
+from app.tasks import crawler as crawler_tasks
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -62,6 +64,16 @@ def seed_user(
         raise typer.Exit(1)
     created = asyncio.run(_seed_user(name, email, password))
     typer.echo(f"user created: {email}" if created else "user exists")
+
+
+@app.command()
+def crawl_url(url: str) -> None:
+    """Queue a crawl of one web page; results appear in the worker log."""
+    if urlsplit(url).scheme not in ("http", "https"):
+        typer.echo("url must start with http:// or https://", err=True)
+        raise typer.Exit(1)
+    crawler_tasks.crawl_url.delay(url, trace_id.get())
+    typer.echo(f"queued: {url} (trace {trace_id.get()})")
 
 
 if __name__ == "__main__":

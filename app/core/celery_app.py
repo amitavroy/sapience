@@ -6,7 +6,9 @@ from celery import Celery, Task
 from app.core.config import settings
 
 celery_app = Celery(
-    "app", broker=settings.celery_broker_url, include=["app.tasks.user", "app.tasks.google_chat"]
+    "app",
+    broker=settings.celery_broker_url,
+    include=["app.tasks.user", "app.tasks.google_chat", "app.tasks.crawler"],
 )
 celery_app.conf.update(
     task_ignore_result=True,  # nothing reads results yet
