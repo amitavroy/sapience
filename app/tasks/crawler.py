@@ -15,16 +15,32 @@ async def _extract(url: str) -> ExtractedDocument:
         return await web_extractor.extract_url(client, url)
 
 
-@celery_app.task
-def crawl_url(url: str, trace_id: str) -> None:
+RETRY_DELAYS = (3, 5, 15)  # seconds before failure retries 1, 2 and 3
+
+
+# max_retries=None: the bound is RETRY_DELAYS, counted in `attempt` (not self.request.retries)
+@celery_app.task(bind=True, max_retries=None)
+def crawl_url(self, url: str, trace_id: str, attempt: int = 0) -> None:
     with logger.contextualize(trace_id=trace_id, job="crawl_url"):
         started = time.monotonic()
         try:
             # SYNC-EXCEPTION: Celery task bodies are sync; asyncio.run drives the async work
             doc = asyncio.run(_extract(url))
         except web_extractor.ExtractionError as exc:
+            if exc.retryable and attempt < len(RETRY_DELAYS):
+                delay = RETRY_DELAYS[attempt]
+                logger.info("retrying {} in {}s: {}", url, delay, exc.reason.value)
+                # raised here, outside asyncio.run, so the task goes back on the queue
+                raise self.retry(
+                    countdown=delay,
+                    kwargs={"url": url, "trace_id": trace_id, "attempt": attempt + 1},
+                ) from exc
             logger.warning(
-                "crawl failed for {}: {} (status {})", url, exc.reason.value, exc.status_code
+                "crawl failed for {}: {} (status {}, attempts {})",
+                url,
+                exc.reason.value,
+                exc.status_code,
+                attempt + 1,
             )
             return
 

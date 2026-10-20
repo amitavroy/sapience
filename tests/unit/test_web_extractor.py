@@ -163,3 +163,25 @@ async def test_error_status_is_never_extracted_as_content() -> None:
 
     assert exc.value.reason is ExtractionErrorReason.HTTP_STATUS
     assert exc.value.status_code == 404
+
+
+@pytest.mark.parametrize(("status", "retryable"), [(500, True), (404, False), (503, False)])
+async def test_only_a_500_is_marked_retryable(status: int, retryable: bool) -> None:
+    with pytest.raises(ExtractionError) as exc:
+        await extract_from(lambda _: httpx.Response(status))
+
+    assert exc.value.reason is ExtractionErrorReason.HTTP_STATUS
+    assert exc.value.status_code == status
+    assert exc.value.retryable is retryable
+
+
+@pytest.mark.parametrize("error", [httpx.ConnectTimeout, httpx.ReadTimeout, httpx.ConnectError])
+async def test_timeouts_and_connection_errors_are_retryable_network_errors(error: type) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise error("boom", request=request)
+
+    with pytest.raises(ExtractionError) as exc:
+        await extract_from(handler)
+
+    assert exc.value.reason is ExtractionErrorReason.NETWORK
+    assert exc.value.retryable is True

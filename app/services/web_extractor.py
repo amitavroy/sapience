@@ -14,6 +14,8 @@ from selectolax.lexbor import LexborHTMLParser, LexborNode
 from app.core.config import settings
 from app.schemas.extracted_document import Block, ExtractedDocument
 
+# only a plain 500 for now; gateway errors (502-504) are the first candidates to add
+RETRYABLE_STATUS_CODES = frozenset({500})
 ACCEPTED_MIME_TYPES = {"text/html", "application/xhtml+xml"}
 HEADERS = {
     "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
@@ -38,6 +40,7 @@ INLINE_TAGS = frozenset(
 class ExtractionErrorReason(StrEnum):
     INVALID_URL = "invalid_url"
     HTTP_STATUS = "http_status"
+    NETWORK = "network"
     TOO_LARGE = "too_large"
     NOT_HTML = "not_html"
     EMPTY_CONTENT = "empty_content"
@@ -45,11 +48,17 @@ class ExtractionErrorReason(StrEnum):
 
 class ExtractionError(Exception):
     def __init__(
-        self, reason: ExtractionErrorReason, message: str, *, status_code: int | None = None
+        self,
+        reason: ExtractionErrorReason,
+        message: str,
+        *,
+        status_code: int | None = None,
+        retryable: bool = False,
     ):
         super().__init__(message)
         self.reason = reason
         self.status_code = status_code
+        self.retryable = retryable
 
 
 @dataclass(frozen=True)
@@ -65,6 +74,17 @@ class FetchedPage:
 
 async def fetch_page(client: httpx.AsyncClient, url: str) -> FetchedPage:
     """One GET: validate the scheme, stream with the size cap, check status and content type."""
+    try:
+        return await _fetch_page(client, url)
+    except httpx.TransportError as exc:  # timeouts, connection errors, protocol errors
+        raise ExtractionError(
+            ExtractionErrorReason.NETWORK,
+            f"{type(exc).__name__} fetching {url}: {exc}",
+            retryable=True,
+        ) from exc
+
+
+async def _fetch_page(client: httpx.AsyncClient, url: str) -> FetchedPage:
     if urlsplit(url).scheme not in ("http", "https"):
         raise ExtractionError(ExtractionErrorReason.INVALID_URL, f"unsupported URL: {url}")
 
@@ -82,6 +102,7 @@ async def fetch_page(client: httpx.AsyncClient, url: str) -> FetchedPage:
                 ExtractionErrorReason.HTTP_STATUS,
                 f"HTTP {response.status_code} for {url}",
                 status_code=response.status_code,
+                retryable=response.status_code in RETRYABLE_STATUS_CODES,
             )
 
         mime_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
