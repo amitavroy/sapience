@@ -35,6 +35,11 @@ Every request gets a trace id that is on every log line it produces and is retur
 - If uvicorn runs with `--proxy-headers`, keep `--forwarded-allow-ips` equal to `TRUSTED_PROXIES`, and have the edge proxy overwrite any client-supplied `X-Request-ID`.
 - Format: human-readable with the trace id when `DEBUG` is true; one JSON object per line otherwise (the id is under `record.extra.trace_id`). Lines outside a request show `-`.
 - Each `uv run cli ...` invocation gets its own trace id.
+- File sink: logs also go to one file per day, `<LOG_DIR>/YYYY-MM-DD.log` (default `logs/`, git-ignored). The API, the Celery worker and the CLI all share it, appending to the same day's file.
+- `LOG_FILE_LEVEL` is the lowest level written to the file (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`; `WARNING` writes WARNING and above). Empty (default) means no file logging; `.env.example` sets `INFO`. A typo fails at startup.
+- `LOG_FILE_RETENTION_DAYS` (default 14) deletes older files; 0 keeps them forever.
+- File format follows the same rule as stderr: plain text with the trace id when `DEBUG` is true, one JSON object per line otherwise.
+- Docker: files go to `/srv/logs` inside the container and are lost with it unless a volume is mounted there (compose does not mount one).
 - Jobs: none exist yet. When added, pass `trace_id` to the job and wrap it in `logger.contextualize(trace_id=..., job=name)` so job logs join the request's trace.
 
 # Health check
