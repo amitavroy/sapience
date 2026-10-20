@@ -18,7 +18,7 @@ def crawl_url(self, url: str, trace_id: str, attempt: int = 0, requeues: int = 0
         started = time.monotonic()
         try:
             # SYNC-EXCEPTION: Celery task bodies are sync; asyncio.run drives the async work
-            _, doc = asyncio.run(crawler_service.crawl_page(url))
+            outcome, doc = asyncio.run(crawler_service.crawl_page(url))
         except crawler_service.RateLimited:
             # not a failure: re-queue without using up the failure retries
             if requeues >= MAX_RATE_LIMIT_REQUEUES:
@@ -55,6 +55,10 @@ def crawl_url(self, url: str, trace_id: str, attempt: int = 0, requeues: int = 0
                 exc.status_code,
                 attempt + 1,
             )
+            return
+
+        if outcome is crawler_service.CrawlOutcome.ROBOTS_DISALLOWED:
+            logger.info("skipped: disallowed by robots.txt ({})", url)
             return
 
         duration_ms = round((time.monotonic() - started) * 1000)

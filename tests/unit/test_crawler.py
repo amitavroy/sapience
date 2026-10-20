@@ -32,6 +32,16 @@ def rate_limit_open(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(crawler_service, "_acquire", allow)
 
 
+@pytest.fixture(autouse=True)
+def robots_open(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests answer every request with one page; robots.txt has its own tests."""
+
+    async def allow(_client: httpx.AsyncClient, _url: str) -> bool:
+        return True
+
+    monkeypatch.setattr(crawler_service, "_robots_allows", allow)
+
+
 @pytest.fixture
 def serve(monkeypatch: pytest.MonkeyPatch):
     """Make the task's HTTP client answer every request with the given response."""

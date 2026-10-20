@@ -18,7 +18,7 @@ Each slice ends in a working, reviewable state. Pause for review after each slic
 | 2 | Failures and retries | Task retries retryable errors after 3 s, 5 s and 15 s (3 retries); permanent and exhausted failures logged at WARNING | [x] |
 | 2 | Failures and retries | Tests: 500 then success, 404 and 503 not retried, retries exhausted, timeout retried, logged lines | [x] |
 | 3 | Politeness | `app/services/crawler.py`: per-host rate limit (`crawler_rate_limit`, default `1/second`) via the Redis limiter; the task re-queues when limited | [x] |
-| 3 | Politeness | robots.txt check (RFC 9309 rules, `*` group), cached per host in the worker process; disallowed URLs skipped with a log line | [ ] |
+| 3 | Politeness | robots.txt check (RFC 9309 rules, `*` group), cached per host in the worker process; disallowed URLs skipped with a log line | [x] |
 | 3 | Politeness | Tests: limited then allowed re-queues without using a failure retry; robots allow, disallow, 404 and 5xx cases | [ ] |
 | 4 | Typed blocks and sections | Heading, list, table, code, quote block types; `figcaption`; `sections` as index ranges with `heading_path`; `title` fallback | [ ] |
 | 4 | Typed blocks and sections | Tests and fixtures: `structured`, `nested_blocks` (no duplicated or lost text), skipped heading levels, pre-heading content | [ ] |

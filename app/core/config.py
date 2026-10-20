@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     crawler_timeout_seconds: float = 15
     crawler_max_bytes: int = 5 * 1024 * 1024  # cap on the decompressed response body
     crawler_rate_limit: str = "1/second"  # per host, in `limits` syntax
+    crawler_robots_cache_seconds: int = 3600  # per host, per worker process
     # dev-only defaults for `cli seed-user`
     seed_user_name: str = "Admin"
     seed_user_email: str = "admin@example.com"
