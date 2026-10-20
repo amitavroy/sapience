@@ -185,3 +185,115 @@ async def test_timeouts_and_connection_errors_are_retryable_network_errors(error
 
     assert exc.value.reason is ExtractionErrorReason.NETWORK
     assert exc.value.retryable is True
+
+
+async def test_structured_page_has_typed_blocks_in_order() -> None:
+    doc = await extract_fixture("structured.html")
+
+    assert [(b.type, b.level) for b in doc.blocks] == [
+        ("heading", 1),
+        ("paragraph", None),
+        ("heading", 2),
+        ("list", None),
+        ("heading", 2),
+        ("table", None),
+        ("heading", 3),
+        ("code", None),
+        ("quote", None),
+        ("paragraph", None),
+    ]
+    by_type = {b.type: b for b in reversed(doc.blocks)}
+    assert by_type["list"].items == ["First", "  Nested one", "  Nested two", "Second"]
+    assert by_type["table"].rows == [["Name", "Value"], ["alpha", "1"], ["beta", "2"]]
+    assert by_type["code"].text == "def f():\n    return 1\n"  # whitespace kept exactly
+    assert by_type["quote"].text == "Quoted words."
+    assert doc.blocks[-1].text == "Figure caption."  # figcaption kept, alt text dropped
+    assert "ALT_TEXT" not in doc.text()
+
+
+async def test_structured_page_metadata_comes_from_the_head_only() -> None:
+    doc = await extract_fixture("structured.html")
+
+    assert doc.title == "Structured page"
+    assert doc.metadata == {
+        "description": "A page with every block type",
+        "language": "en-GB",
+        "canonical_url": "https://example.test/structured",
+        "og": {"og:title": "OG structured", "og:type": "article"},
+    }
+    assert "Structured page" not in doc.text()
+
+
+async def test_sections_are_index_ranges_with_a_heading_path() -> None:
+    doc = await extract_fixture("structured.html")
+
+    assert [(s.heading_path, s.start, s.end) for s in doc.sections] == [
+        (["Guide"], 0, 2),
+        (["Guide", "Steps"], 2, 4),
+        (["Guide", "Data"], 4, 6),
+        (["Guide", "Data", "Code"], 6, 10),
+    ]
+    code_section = doc.sections[3]
+    assert [b.type for b in doc.section_blocks(code_section)] == [
+        "heading",
+        "code",
+        "quote",
+        "paragraph",
+    ]
+
+
+async def test_nested_blocks_lose_no_text_and_duplicate_none() -> None:
+    doc = await extract_fixture("nested_blocks.html")
+
+    assert [(b.type, b.text or b.items) for b in doc.blocks] == [
+        ("paragraph", "Text before the first heading."),
+        ("heading", "Top"),
+        ("list", ["Paragraph inside item", "Plain item"]),
+        ("quote", "Quoted paragraph and trailing quote text"),
+        ("paragraph", "Loose text"),
+        ("paragraph", "Paragraph beside it"),
+        ("paragraph", "more loose text"),
+        ("heading", "Skipped level"),
+        ("paragraph", "Under h3."),
+        ("heading", "Back up"),
+        ("paragraph", "Under h2."),
+        ("heading", "Second top"),
+        ("paragraph", "Fresh start."),
+    ]
+    text = doc.text()
+    for phrase in ("Paragraph inside item", "Quoted paragraph", "Paragraph beside it"):
+        assert text.count(phrase) == 1
+
+
+async def test_content_before_the_first_heading_is_its_own_section() -> None:
+    doc = await extract_fixture("nested_blocks.html")
+
+    assert (doc.sections[0].heading_path, doc.sections[0].start, doc.sections[0].end) == ([], 0, 1)
+
+
+async def test_skipped_heading_levels_nest_and_a_second_h1_resets_the_path() -> None:
+    doc = await extract_fixture("nested_blocks.html")
+
+    assert [s.heading_path for s in doc.sections] == [
+        [],
+        ["Top"],
+        ["Top", "Skipped level"],
+        ["Top", "Back up"],
+        ["Second top"],
+    ]
+
+
+@pytest.mark.parametrize(
+    ("html", "title"),
+    [
+        (b"<title>From title</title><h1>H</h1><p>x</p>", "From title"),
+        (b'<meta property="og:title" content="From og"><h1>H</h1><p>x</p>', "From og"),
+        (b"<h1>From h1</h1><p>x</p>", "From h1"),
+        (b"<p>x</p>", "https://a.test/p"),
+    ],
+    ids=["title", "og", "h1", "source_uri"],
+)
+async def test_title_falls_back_through_og_h1_and_the_url(html: bytes, title: str) -> None:
+    doc = await extract_from(lambda _: httpx.Response(200, content=html, headers=HTML))
+
+    assert doc.title == title
