@@ -194,3 +194,75 @@ def test_empty_content_is_not_retried(logs: list[dict], retries: list[dict], ser
     assert warnings(logs) == [
         "crawl failed for https://a.test/p: empty_content (status None, attempts 1)"
     ]
+
+
+def deny_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def deny(_host: str) -> bool:
+        return False
+
+    monkeypatch.setattr(crawler_service, "_acquire", deny)
+
+
+def test_rate_limited_requeues_with_jitter_and_keeps_the_failure_attempt(
+    retries: list[dict], serve, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    serve(httpx.Response(200, content=b"<p>hi</p>", headers=HTML))
+    deny_rate_limit(monkeypatch)
+
+    with pytest.raises(Retry):
+        crawler_tasks.crawl_url("https://a.test/p", "t", attempt=2, requeues=5)
+
+    [call] = retries
+    assert 1 <= call["countdown"] <= 3
+    assert (call["attempt"], call["requeues"]) == (2, 6)
+
+
+def test_limited_then_allowed_runs_without_using_a_failure_retry(
+    logs: list[dict], retries: list[dict], serve, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    serve(httpx.Response(200, content=b"<p>hi</p>", headers=HTML))
+    deny_rate_limit(monkeypatch)
+    with pytest.raises(Retry):
+        crawler_tasks.crawl_url("https://a.test/p", "t")
+    [requeue] = retries
+
+    async def allow(_host: str) -> bool:
+        return True
+
+    monkeypatch.setattr(crawler_service, "_acquire", allow)  # the re-queued run gets through
+    crawler_tasks.crawl_url(
+        "https://a.test/p", "t", attempt=requeue["attempt"], requeues=requeue["requeues"]
+    )
+
+    assert requeue["attempt"] == 0  # the failure budget is untouched
+    assert any(r["message"].startswith("crawled ") for r in logs)
+    assert warnings(logs) == []
+
+
+def test_gives_up_after_the_maximum_number_of_requeues(
+    logs: list[dict], retries: list[dict], serve, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    serve(httpx.Response(200, content=b"<p>hi</p>", headers=HTML))
+    deny_rate_limit(monkeypatch)
+
+    crawler_tasks.crawl_url("https://a.test/p", "t", requeues=crawler_tasks.MAX_RATE_LIMIT_REQUEUES)
+
+    assert retries == []
+    assert warnings(logs) == ["giving up on https://a.test/p: rate limited 60 times"]
+
+
+def test_robots_disallowed_page_is_skipped_with_an_info_line(
+    logs: list[dict], retries: list[dict], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def disallow(_client: httpx.AsyncClient, _url: str) -> bool:
+        return False
+
+    monkeypatch.setattr(crawler_service, "_robots_allows", disallow)
+
+    crawler_tasks.crawl_url("https://a.test/private", "t")
+
+    assert [r["message"] for r in logs if r["level"].name == "INFO"] == [
+        "skipped: disallowed by robots.txt (https://a.test/private)"
+    ]
+    assert retries == []
+    assert warnings(logs) == []
