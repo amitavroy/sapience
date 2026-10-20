@@ -6,8 +6,8 @@ Each slice ends in a working, reviewable state. Pause for review after each slic
 
 | # | Slice | Step | Done |
 |---|-------|------|------|
-| 1 | End-to-end skeleton | Add `selectolax` (`uv add selectolax`) | [ ] |
-| 1 | End-to-end skeleton | Settings: `crawler_user_agent`, `crawler_timeout_seconds`, `crawler_max_bytes` in `app/core/config.py` and `.env.example` | [ ] |
+| 1 | End-to-end skeleton | Add `selectolax` (`uv add selectolax`) | [x] |
+| 1 | End-to-end skeleton | Settings: `crawler_user_agent`, `crawler_timeout_seconds`, `crawler_max_bytes` in `app/core/config.py` and `.env.example` | [x] |
 | 1 | End-to-end skeleton | `app/schemas/extracted_document.py`: minimal `ExtractedDocument` and `Block` (paragraph blocks only) | [ ] |
 | 1 | End-to-end skeleton | `app/services/web_extractor.py`: single fetch (stream, size cap, content type, charset decoding), noise stripping, block walk emitting paragraphs, `EMPTY_CONTENT` | [ ] |
 | 1 | End-to-end skeleton | `app/tasks/crawler.py`: `crawl_url` task logging a summary (INFO) and the full JSON (DEBUG); register it in `celery_app.include` | [ ] |

@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     # Google Chat add-on webhook; empty = endpoint rejects everything
     google_chat_audience: str = ""  # exact HTTP endpoint URL set in the Chat API console
     google_chat_service_account_email: str = ""  # service-<project-number>@gcp-sa-gsuiteaddons...
+    # web page crawler
+    crawler_user_agent: str = (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
+    )
+    crawler_timeout_seconds: float = 15
+    crawler_max_bytes: int = 5 * 1024 * 1024  # cap on the decompressed response body
     # dev-only defaults for `cli seed-user`
     seed_user_name: str = "Admin"
     seed_user_email: str = "admin@example.com"
