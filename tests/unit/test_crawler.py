@@ -5,6 +5,7 @@ import pytest
 from celery.exceptions import Retry
 
 from app.core.logger import logger
+from app.services import crawler as crawler_service
 from app.tasks import crawler as crawler_tasks
 
 PAGES = Path(__file__).parent.parent / "fixtures" / "pages"
@@ -21,6 +22,16 @@ def logs() -> list[dict]:
     logger.remove(sink)
 
 
+@pytest.fixture(autouse=True)
+def rate_limit_open(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No Redis in tests: the per-host limiter always allows."""
+
+    async def allow(_host: str) -> bool:
+        return True
+
+    monkeypatch.setattr(crawler_service, "_acquire", allow)
+
+
 @pytest.fixture
 def serve(monkeypatch: pytest.MonkeyPatch):
     """Make the task's HTTP client answer every request with the given response."""
@@ -28,7 +39,7 @@ def serve(monkeypatch: pytest.MonkeyPatch):
     def _serve(response: httpx.Response) -> None:
         transport = httpx.MockTransport(lambda _: response)
         monkeypatch.setattr(
-            crawler_tasks.httpx, "AsyncClient", lambda: REAL_CLIENT(transport=transport)
+            crawler_service.httpx, "AsyncClient", lambda: REAL_CLIENT(transport=transport)
         )
 
     return _serve
@@ -78,7 +89,7 @@ def retries(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
 def serve_handler(monkeypatch: pytest.MonkeyPatch, handler) -> None:
     transport = httpx.MockTransport(handler)
     monkeypatch.setattr(
-        crawler_tasks.httpx, "AsyncClient", lambda: REAL_CLIENT(transport=transport)
+        crawler_service.httpx, "AsyncClient", lambda: REAL_CLIENT(transport=transport)
     )
 
 
@@ -95,7 +106,13 @@ def test_500_retries_after_3_seconds_then_the_retry_succeeds(
     with pytest.raises(Retry):
         crawler_tasks.crawl_url("https://a.test/p", "trace1234")
     assert retries == [
-        {"countdown": 3, "url": "https://a.test/p", "trace_id": "trace1234", "attempt": 1}
+        {
+            "countdown": 3,
+            "url": "https://a.test/p",
+            "trace_id": "trace1234",
+            "attempt": 1,
+            "requeues": 0,
+        }
     ]
 
     crawler_tasks.crawl_url("https://a.test/p", "trace1234", attempt=1)  # what the broker re-runs
