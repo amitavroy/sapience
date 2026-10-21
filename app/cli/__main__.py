@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.core.logger import logger
 from app.core.trace import trace_id
 from app.db.session import async_session_factory, engine
+from app.models.collection import Collection, CollectionMember, CollectionRole
 from app.schemas.user import UserCreate
 from app.services import user as user_service
 from app.tasks import crawler as crawler_tasks
@@ -64,6 +65,47 @@ def seed_user(
         raise typer.Exit(1)
     created = asyncio.run(_seed_user(name, email, password))
     typer.echo(f"user created: {email}" if created else "user exists")
+
+
+async def _create_collection(
+    name: str, description: str | None, owner_email: str | None
+) -> tuple[int, str] | None:
+    async with async_session_factory() as db:
+        try:
+            owner = None
+            if owner_email is not None:
+                owner = await user_service.get_by_email(db, owner_email)
+                if owner is None:
+                    return None
+            collection = Collection(
+                name=name, description=description, created_by_id=owner.id if owner else None
+            )
+            db.add(collection)
+            await db.flush()
+            if owner is not None:
+                db.add(
+                    CollectionMember(
+                        collection_id=collection.id, user_id=owner.id, role=CollectionRole.OWNER
+                    )
+                )
+            await db.commit()
+            return collection.id, collection.name
+        finally:
+            await engine.dispose()
+
+
+@app.command()
+def create_collection(
+    name: str,
+    description: str | None = typer.Option(None, help="Collection description."),
+    owner_email: str | None = typer.Option(None, help="Email of the owning user."),
+) -> None:
+    """Create a collection and print its id."""
+    created = asyncio.run(_create_collection(name, description, owner_email))
+    if created is None:
+        typer.echo(f"user {owner_email} not found", err=True)
+        raise typer.Exit(1)
+    typer.echo(f"collection created: {created[0]} ({created[1]})")
 
 
 @app.command()

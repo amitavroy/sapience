@@ -3,7 +3,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import CheckConstraint, ForeignKey, String, Text, UniqueConstraint, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, deferred, mapped_column, relationship
 
 from app.db.base import Base
 from app.db.types import JSONType
@@ -39,7 +39,10 @@ class Document(Base):
     title: Mapped[str] = mapped_column(String(500))
     source_uri: Mapped[str | None] = mapped_column(String(1000))
     mime_type: Mapped[str | None] = mapped_column(String(100))
-    content_hash: Mapped[str] = mapped_column(String(64))  # sha256 hex of the raw content
+    # sha256 hex of the normalised extracted text (ExtractedDocument.content_hash)
+    content_hash: Mapped[str] = mapped_column(String(64))
+    # the full ExtractedDocument; deferred so list queries don't load it
+    content: Mapped[dict[str, Any] | None] = deferred(mapped_column(JSONType))
     status: Mapped[str] = mapped_column(
         String(20), default=DocumentStatus.PENDING, server_default=DocumentStatus.PENDING.value
     )
