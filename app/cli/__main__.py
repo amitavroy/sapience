@@ -9,8 +9,8 @@ from app.core.config import settings
 from app.core.logger import logger
 from app.core.trace import trace_id
 from app.db.session import async_session_factory, engine
-from app.models.collection import Collection, CollectionMember, CollectionRole
 from app.schemas.user import UserCreate
+from app.services import collection as collection_service
 from app.services import user as user_service
 from app.tasks import crawler as crawler_tasks
 
@@ -69,26 +69,12 @@ def seed_user(
 
 async def _create_collection(
     name: str, description: str | None, owner_email: str | None
-) -> tuple[int, str] | None:
+) -> tuple[int, str]:
     async with async_session_factory() as db:
         try:
-            owner = None
-            if owner_email is not None:
-                owner = await user_service.get_by_email(db, owner_email)
-                if owner is None:
-                    return None
-            collection = Collection(
-                name=name, description=description, created_by_id=owner.id if owner else None
+            collection = await collection_service.create_collection(
+                db, name, description, owner_email
             )
-            db.add(collection)
-            await db.flush()
-            if owner is not None:
-                db.add(
-                    CollectionMember(
-                        collection_id=collection.id, user_id=owner.id, role=CollectionRole.OWNER
-                    )
-                )
-            await db.commit()
             return collection.id, collection.name
         finally:
             await engine.dispose()
@@ -101,20 +87,34 @@ def create_collection(
     owner_email: str | None = typer.Option(None, help="Email of the owning user."),
 ) -> None:
     """Create a collection and print its id."""
-    created = asyncio.run(_create_collection(name, description, owner_email))
-    if created is None:
+    try:
+        collection_id, collection_name = asyncio.run(
+            _create_collection(name, description, owner_email)
+        )
+    except collection_service.OwnerNotFoundError:
         typer.echo(f"user {owner_email} not found", err=True)
-        raise typer.Exit(1)
-    typer.echo(f"collection created: {created[0]} ({created[1]})")
+        raise typer.Exit(1) from None
+    typer.echo(f"collection created: {collection_id} ({collection_name})")
+
+
+async def _collection_exists(collection_id: int) -> bool:
+    async with async_session_factory() as db:
+        try:
+            return await collection_service.exists(db, collection_id)
+        finally:
+            await engine.dispose()
 
 
 @app.command()
-def crawl_url(url: str) -> None:
-    """Queue a crawl of one web page; results appear in the worker log."""
+def crawl_url(url: str, collection: int = typer.Option(..., help="Collection id")) -> None:
+    """Queue a crawl of one web page into a collection; results appear in the worker log."""
     if urlsplit(url).scheme not in ("http", "https"):
         typer.echo("url must start with http:// or https://", err=True)
         raise typer.Exit(1)
-    crawler_tasks.crawl_url.delay(url, trace_id.get())
+    if not asyncio.run(_collection_exists(collection)):
+        typer.echo(f"collection {collection} not found", err=True)
+        raise typer.Exit(1)
+    crawler_tasks.crawl_url.delay(url, trace_id.get(), collection)
     typer.echo(f"queued: {url} (trace {trace_id.get()})")
 
 

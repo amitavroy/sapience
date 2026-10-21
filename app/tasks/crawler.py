@@ -13,7 +13,9 @@ MAX_RATE_LIMIT_REQUEUES = 60  # only reached when one host is flooded with tasks
 
 # max_retries=None: the bound is RETRY_DELAYS, counted in `attempt` (not self.request.retries)
 @celery_app.task(bind=True, max_retries=None)
-def crawl_url(self, url: str, trace_id: str, attempt: int = 0, requeues: int = 0) -> None:
+def crawl_url(
+    self, url: str, trace_id: str, collection_id: int, attempt: int = 0, requeues: int = 0
+) -> None:
     with logger.contextualize(trace_id=trace_id, job="crawl_url"):
         started = time.monotonic()
         try:
@@ -27,9 +29,9 @@ def crawl_url(self, url: str, trace_id: str, attempt: int = 0, requeues: int = 0
             raise self.retry(
                 # jitter keeps many queued tasks for one host from retrying in lockstep
                 countdown=random.uniform(1, 3),
-                # url and trace_id go in args: delay() queued them positionally, and passing
-                # them as kwargs too fails with "multiple values for argument"
-                args=(url, trace_id),
+                # url, trace_id and collection_id go in args: delay() queued them positionally,
+                # and passing them as kwargs too fails with "multiple values for argument"
+                args=(url, trace_id, collection_id),
                 kwargs={"attempt": attempt, "requeues": requeues + 1},
             ) from None
         except web_extractor.ExtractionError as exc:
@@ -39,7 +41,7 @@ def crawl_url(self, url: str, trace_id: str, attempt: int = 0, requeues: int = 0
                 # raised here, outside asyncio.run, so the task goes back on the queue
                 raise self.retry(
                     countdown=delay,
-                    args=(url, trace_id),
+                    args=(url, trace_id, collection_id),
                     kwargs={"attempt": attempt + 1, "requeues": requeues},
                 ) from exc
             logger.warning(

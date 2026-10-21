@@ -11,11 +11,22 @@ def queued(monkeypatch: pytest.MonkeyPatch) -> list[tuple]:
     return calls
 
 
+@pytest.fixture(autouse=True)
+def collection_exists(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def exists(_collection_id: int) -> bool:
+        return True
+
+    monkeypatch.setattr(cli, "_collection_exists", exists)
+
+
 def test_crawl_url_enqueues_one_task_with_the_trace_id(queued: list[tuple]) -> None:
-    result = CliRunner().invoke(cli.app, ["crawl-url", "https://example.com/page"])
+    result = CliRunner().invoke(
+        cli.app, ["crawl-url", "https://example.com/page", "--collection", "1"]
+    )
 
     assert result.exit_code == 0
-    [(url, trace)] = queued
+    [(url, trace, collection_id)] = queued
+    assert collection_id == 1
     assert url == "https://example.com/page"
     assert trace
     assert f"queued: https://example.com/page (trace {trace})" in result.output
@@ -23,7 +34,7 @@ def test_crawl_url_enqueues_one_task_with_the_trace_id(queued: list[tuple]) -> N
 
 @pytest.mark.parametrize("url", ["ftp://example.com/file", "not-a-url"])
 def test_crawl_url_rejects_non_http_urls(queued: list[tuple], url: str) -> None:
-    result = CliRunner().invoke(cli.app, ["crawl-url", url])
+    result = CliRunner().invoke(cli.app, ["crawl-url", url, "--collection", "1"])
 
     assert result.exit_code == 1
     assert queued == []

@@ -60,7 +60,7 @@ def test_success_logs_the_summary_at_info_and_the_json_at_debug(logs: list[dict]
     serve(httpx.Response(200, content=html, headers={"content-type": "text/html"}))
 
     # sync test: the task drives its async body with asyncio.run, like the real worker
-    crawler_tasks.crawl_url("https://a.test/p", "trace1234")
+    crawler_tasks.crawl_url("https://a.test/p", "trace1234", 1)
 
     [summary] = [r for r in logs if r["level"].name == "INFO"]
     assert summary["message"].startswith("crawled https://a.test/p source_uri=https://a.test/p")
@@ -76,7 +76,7 @@ def test_failure_logs_a_warning_without_raising(logs: list[dict], serve) -> None
     html = (PAGES / "javascript_app.html").read_bytes()
     serve(httpx.Response(200, content=html, headers={"content-type": "text/html"}))
 
-    crawler_tasks.crawl_url("https://a.test/app", "trace1234")
+    crawler_tasks.crawl_url("https://a.test/app", "trace1234", 1)
 
     [warning] = [r for r in logs if r["level"].name == "WARNING"]
     assert "empty_content" in warning["message"]
@@ -91,7 +91,7 @@ def retries(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
     def fake_retry(*, countdown: int, args: tuple, kwargs: dict) -> None:
         # like Celery, the retried call is args + kwargs, so none of them may repeat
         assert set(kwargs) == {"attempt", "requeues"}
-        url, trace_id = args
+        url, trace_id, _collection_id = args
         calls.append({"countdown": countdown, "url": url, "trace_id": trace_id, **kwargs})
         raise Retry()
 
@@ -117,7 +117,7 @@ def test_500_retries_after_3_seconds_then_the_retry_succeeds(
     serve_handler(monkeypatch, lambda _: next(responses))
 
     with pytest.raises(Retry):
-        crawler_tasks.crawl_url("https://a.test/p", "trace1234")
+        crawler_tasks.crawl_url("https://a.test/p", "trace1234", 1)
     assert retries == [
         {
             "countdown": 3,
@@ -128,7 +128,9 @@ def test_500_retries_after_3_seconds_then_the_retry_succeeds(
         }
     ]
 
-    crawler_tasks.crawl_url("https://a.test/p", "trace1234", attempt=1)  # what the broker re-runs
+    crawler_tasks.crawl_url(
+        "https://a.test/p", "trace1234", 1, attempt=1
+    )  # what the broker re-runs
 
     assert [r["message"] for r in logs if r["level"].name == "INFO"][0] == (
         "retrying https://a.test/p in 3s: http_status"
@@ -144,7 +146,7 @@ def test_retry_delays_are_3_5_and_15_seconds_with_a_rising_attempt(
 
     for attempt in range(3):
         with pytest.raises(Retry):
-            crawler_tasks.crawl_url("https://a.test/p", "t", attempt=attempt)
+            crawler_tasks.crawl_url("https://a.test/p", "t", 1, attempt=attempt)
 
     assert [(c["countdown"], c["attempt"]) for c in retries] == [(3, 1), (5, 2), (15, 3)]
 
@@ -154,7 +156,7 @@ def test_retries_exhausted_logs_a_warning_and_stops(
 ) -> None:
     serve_handler(monkeypatch, lambda _: httpx.Response(500))
 
-    crawler_tasks.crawl_url("https://a.test/p", "t", attempt=3)
+    crawler_tasks.crawl_url("https://a.test/p", "t", 1, attempt=3)
 
     assert retries == []
     assert warnings(logs) == [
@@ -168,7 +170,7 @@ def test_other_error_statuses_are_not_retried(
 ) -> None:
     serve_handler(monkeypatch, lambda _: httpx.Response(status))
 
-    crawler_tasks.crawl_url("https://a.test/p", "t")
+    crawler_tasks.crawl_url("https://a.test/p", "t", 1)
 
     assert retries == []
     assert warnings(logs) == [
@@ -183,7 +185,7 @@ def test_timeout_is_retried(retries: list[dict], monkeypatch: pytest.MonkeyPatch
     serve_handler(monkeypatch, timeout)
 
     with pytest.raises(Retry):
-        crawler_tasks.crawl_url("https://a.test/p", "t")
+        crawler_tasks.crawl_url("https://a.test/p", "t", 1)
 
     assert [(c["countdown"], c["attempt"]) for c in retries] == [(3, 1)]
 
@@ -191,7 +193,7 @@ def test_timeout_is_retried(retries: list[dict], monkeypatch: pytest.MonkeyPatch
 def test_empty_content_is_not_retried(logs: list[dict], retries: list[dict], serve) -> None:
     serve(httpx.Response(200, content=(PAGES / "empty_body.html").read_bytes(), headers=HTML))
 
-    crawler_tasks.crawl_url("https://a.test/p", "t")
+    crawler_tasks.crawl_url("https://a.test/p", "t", 1)
 
     assert retries == []
     assert warnings(logs) == [
@@ -213,7 +215,7 @@ def test_rate_limited_requeues_with_jitter_and_keeps_the_failure_attempt(
     deny_rate_limit(monkeypatch)
 
     with pytest.raises(Retry):
-        crawler_tasks.crawl_url("https://a.test/p", "t", attempt=2, requeues=5)
+        crawler_tasks.crawl_url("https://a.test/p", "t", 1, attempt=2, requeues=5)
 
     [call] = retries
     assert 1 <= call["countdown"] <= 3
@@ -226,7 +228,7 @@ def test_limited_then_allowed_runs_without_using_a_failure_retry(
     serve(httpx.Response(200, content=b"<p>hi</p>", headers=HTML))
     deny_rate_limit(monkeypatch)
     with pytest.raises(Retry):
-        crawler_tasks.crawl_url("https://a.test/p", "t")
+        crawler_tasks.crawl_url("https://a.test/p", "t", 1)
     [requeue] = retries
 
     async def allow(_host: str) -> bool:
@@ -234,7 +236,7 @@ def test_limited_then_allowed_runs_without_using_a_failure_retry(
 
     monkeypatch.setattr(crawler_service, "_acquire", allow)  # the re-queued run gets through
     crawler_tasks.crawl_url(
-        "https://a.test/p", "t", attempt=requeue["attempt"], requeues=requeue["requeues"]
+        "https://a.test/p", "t", 1, attempt=requeue["attempt"], requeues=requeue["requeues"]
     )
 
     assert requeue["attempt"] == 0  # the failure budget is untouched
@@ -248,7 +250,9 @@ def test_gives_up_after_the_maximum_number_of_requeues(
     serve(httpx.Response(200, content=b"<p>hi</p>", headers=HTML))
     deny_rate_limit(monkeypatch)
 
-    crawler_tasks.crawl_url("https://a.test/p", "t", requeues=crawler_tasks.MAX_RATE_LIMIT_REQUEUES)
+    crawler_tasks.crawl_url(
+        "https://a.test/p", "t", 1, requeues=crawler_tasks.MAX_RATE_LIMIT_REQUEUES
+    )
 
     assert retries == []
     assert warnings(logs) == ["giving up on https://a.test/p: rate limited 60 times"]
@@ -262,7 +266,7 @@ def test_robots_disallowed_page_is_skipped_with_an_info_line(
 
     monkeypatch.setattr(crawler_service, "_robots_allows", disallow)
 
-    crawler_tasks.crawl_url("https://a.test/private", "t")
+    crawler_tasks.crawl_url("https://a.test/private", "t", 1)
 
     assert [r["message"] for r in logs if r["level"].name == "INFO"] == [
         "skipped: disallowed by robots.txt (https://a.test/private)"
