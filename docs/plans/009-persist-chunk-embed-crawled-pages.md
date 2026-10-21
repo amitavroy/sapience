@@ -9,7 +9,7 @@ Each slice ends in a working, reviewable state. Pause for review after each slic
 | 1 | Store the page | Migration: nullable `documents.content` (JSON / JSONB); model maps it with `deferred()`; fix the `content_hash` comment | [x] |
 | 1 | Store the page | `app/cli/__main__.py`: `create-collection <name> [--description] [--owner-email]` prints the new id | [x] |
 | 1 | Store the page | `crawl-url <url> --collection <id>` (required): the CLI checks the collection exists, and `collection_id` travels in the task args (including retry args) | [x] |
-| 1 | Store the page | `app/services/ingest.py`: `store_extracted(db, collection_id, doc)` inserts a `pending` `Document` with `content`, or reports `DUPLICATE` / `COLLECTION_MISSING` | [ ] |
+| 1 | Store the page | `app/services/ingest.py`: `store_extracted(db, collection_id, doc)` inserts a `pending` `Document` with `content`, or reports `DUPLICATE` / `COLLECTION_MISSING` | [x] |
 | 1 | Store the page | `crawl_url` task: after extraction, call the ingest service and log `stored document <id>` / `duplicate of document <id>` / `collection <id> not found` | [ ] |
 | 1 | Store the page | Tests: create-collection, crawl-url validation and enqueue, ingest stores, duplicate, missing collection, task retry args carry `collection_id` | [ ] |
 | 2 | Chunk by section | `app/services/chunking/`: `Chunker` protocol, `ChunkDraft`, `chunker_for(mime_type)` registry, `estimate_tokens` (characters ÷ 4, no dependency) | [ ] |
