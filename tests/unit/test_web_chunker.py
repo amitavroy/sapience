@@ -38,7 +38,7 @@ def make_doc(*sections: tuple[list[str], list[Block]]) -> ExtractedDocument:
 
 def chunker(**kwargs) -> WebChunker:
     """Sizes in words, so assertions are easy to reason about."""
-    sizes = {"target_tokens": 30, "max_tokens": 60, "min_tokens": 8}
+    sizes = {"target_tokens": 30, "max_tokens": 60, "min_tokens": 8, "overlap_tokens": 0}
     return WebChunker(count_tokens=lambda text: len(text.split()), **{**sizes, **kwargs})
 
 

@@ -18,7 +18,7 @@ Each slice ends in a working, reviewable state. Pause for review after each slic
 | 2 | Chunk by section | `cli show-chunks <document-id>`: prints each chunk's index, tokens, heading path and content | [x] |
 | 2 | Chunk by section | `SYNC-EXCEPTION` comment and a row in `docs/architecture/index.md` for chunking | [x] |
 | 2 | Chunk by section | Tests: merging, splitting, no lost text, contiguous `chunk_index`, meta, registry, ingest stores chunks | [x] |
-| 3 | Overlap and oversized blocks | Overlap tail (whole blocks or trailing sentences, up to `overlap_tokens`) between pieces of one split section; never across sections | [ ] |
+| 3 | Overlap and oversized blocks | Overlap tail (whole blocks or trailing sentences, up to `overlap_tokens`) between pieces of one split section; never across sections | [x] |
 | 3 | Overlap and oversized blocks | Oversized-block splitting: paragraph/quote by sentences, list by items, table by rows with the header row repeated, code by lines, hard token cut as a last resort | [ ] |
 | 3 | Overlap and oversized blocks | Tests: overlap present inside a split section and absent across sections; every chunk ≤ `max_tokens`; table header repeated; code split on lines | [ ] |
 | 4 | Embed | Add `openai` (`uv add openai`; the SDK is used for OpenRouter too); settings `embedding_provider`, `embedding_base_url`, `embedding_api_key`, `embedding_model`, `embedding_batch_size`, `embedding_timeout_seconds` in `config.py` and `.env.example` | [ ] |

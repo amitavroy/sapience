@@ -1,10 +1,19 @@
 import os.path
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
 from app.schemas.extracted_document import Block, ExtractedDocument
 from app.services.chunking.base import ChunkDraft
 from app.services.chunking.tokens import estimate_tokens
+
+# ". The", "? 3", '! "Quote': a sentence end, whitespace, then something that starts a sentence.
+# Plain regex, no NLP dependency; abbreviations ("e.g. The") may split early.
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"'(\[])")
+
+
+def split_sentences(text: str) -> list[str]:
+    return [part for part in _SENTENCE_END.split(text) if part]
 
 
 def render_block(block: Block) -> str:
@@ -124,29 +133,65 @@ class WebChunker:
         return self._draft(pieces, heading_path)
 
     def _split(self, unit: _Unit) -> list[ChunkDraft]:
-        """Greedy split at block boundaries; every piece keeps the section's heading path."""
+        """Greedy split at block boundaries; every piece keeps the section's heading path.
+
+        Each piece after the first starts with a tail of the previous piece (overlap), which
+        counts toward the piece's size."""
         groups: list[list[_Piece]] = [[]]
+        tails = [""]
         size = 0
         for piece in unit.pieces:
+            group = groups[-1]
             over = size + piece.tokens > self.target_tokens
             # a heading stays with the block after it, as long as the cap allows
-            lone_heading = len(groups[-1]) == 1 and groups[-1][0].heading
+            lone_heading = len(group) == 1 and group[0].heading
             if lone_heading and size + piece.tokens <= self.max_tokens:
                 over = False
-            if groups[-1] and over:
+            if group and over:
+                tail = self._overlap_tail(group)
                 groups.append([])
-                size = 0
+                tails.append(tail)
+                size = self.count_tokens(tail) if tail else 0
             groups[-1].append(piece)
             size += piece.tokens
         # a tiny tail reads badly on its own: fold it back if the result stays within the cap
         if len(groups) > 1 and sum(p.tokens for p in groups[-1]) < self.min_tokens:
             merged = groups[-2] + groups[-1]
-            if self._joined_tokens(merged) <= self.max_tokens:
+            if self._joined_tokens(merged, tails[-2]) <= self.max_tokens:
                 groups[-2:] = [merged]
-        return [self._draft(group, unit.heading_path) for group in groups]
+                tails[-2:] = [tails[-2]]
+        return [
+            self._draft(group, unit.heading_path, tail)
+            for group, tail in zip(groups, tails, strict=True)
+        ]
 
-    def _draft(self, pieces: list[_Piece], heading_path: list[str]) -> ChunkDraft:
-        content = "\n\n".join(p.text for p in pieces)
+    def _overlap_tail(self, pieces: list[_Piece]) -> str:
+        """The end of a piece, to repeat at the start of the next: whole trailing blocks that fit
+        in `overlap_tokens`, else the trailing sentences of the last block. Never a cut word."""
+        if self.overlap_tokens <= 0:
+            return ""
+        taken: list[_Piece] = []
+        size = 0
+        for piece in reversed(pieces):
+            if size + piece.tokens > self.overlap_tokens:
+                break
+            taken.insert(0, piece)
+            size += piece.tokens
+        if taken:
+            return "\n\n".join(p.text for p in taken)
+        sentences: list[str] = []
+        size = 0
+        for sentence in reversed(split_sentences(pieces[-1].text)):
+            tokens = self.count_tokens(sentence)
+            if size + tokens > self.overlap_tokens:
+                break
+            sentences.insert(0, sentence)
+            size += tokens
+        return " ".join(sentences)
+
+    def _draft(self, pieces: list[_Piece], heading_path: list[str], tail: str = "") -> ChunkDraft:
+        # block_start/block_end cover the piece's own blocks; the overlap tail is not counted
+        content = "\n\n".join(([tail] if tail else []) + [p.text for p in pieces])
         return ChunkDraft(
             content=content,
             token_count=self.count_tokens(content),
@@ -155,8 +200,8 @@ class WebChunker:
             block_end=pieces[-1].index + 1,
         )
 
-    def _joined_tokens(self, pieces: list[_Piece]) -> int:
-        return self.count_tokens("\n\n".join(p.text for p in pieces))
+    def _joined_tokens(self, pieces: list[_Piece], tail: str = "") -> int:
+        return self.count_tokens("\n\n".join(([tail] if tail else []) + [p.text for p in pieces]))
 
 
 def _branch(heading_path: list[str]) -> str | None:
