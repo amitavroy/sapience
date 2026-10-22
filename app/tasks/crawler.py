@@ -76,7 +76,12 @@ def crawl_url(
 
         match stored.outcome:
             case ingest.StoreOutcome.STORED:
-                logger.info("stored document {}", stored.document_id)
+                logger.info(
+                    "stored document {} chunks={} tokens={}",
+                    stored.document_id,
+                    stored.chunks,
+                    stored.tokens,
+                )
             case ingest.StoreOutcome.DUPLICATE:
                 logger.info("duplicate of document {}", stored.document_id)
             case ingest.StoreOutcome.COLLECTION_MISSING:

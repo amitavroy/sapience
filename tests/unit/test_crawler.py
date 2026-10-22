@@ -328,11 +328,11 @@ def test_stored_page_logs_the_document_id(
     logs: list[dict], serve, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     serve(httpx.Response(200, content=b"<p>hi</p>", headers=HTML))
-    stub_store(monkeypatch, ingest.StoreResult(ingest.StoreOutcome.STORED, 7))
+    stub_store(monkeypatch, ingest.StoreResult(ingest.StoreOutcome.STORED, 7, chunks=3, tokens=250))
 
     crawler_tasks.crawl_url("https://a.test/p", "t", 1)
 
-    assert "stored document 7" in infos(logs)
+    assert "stored document 7 chunks=3 tokens=250" in infos(logs)
 
 
 def test_duplicate_page_logs_the_existing_document_id(

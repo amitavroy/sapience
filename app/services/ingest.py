@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -6,8 +7,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import task_session
+from app.models.chunk import Chunk
 from app.models.document import Document, DocumentStatus
 from app.schemas.extracted_document import ExtractedDocument
+from app.services import chunking
 from app.services import collection as collection_service
 from app.services import crawler as crawler_service
 
@@ -42,11 +45,14 @@ def _duplicate(existing: Document) -> StoreResult:
 async def store_extracted(
     db: AsyncSession, collection_id: int, doc: ExtractedDocument
 ) -> StoreResult:
-    """Insert a pending Document with its extracted content, in one transaction."""
+    """Insert a pending Document with its extracted content and chunks, in one transaction."""
     if not await collection_service.exists(db, collection_id):
         return StoreResult(StoreOutcome.COLLECTION_MISSING)
     if (existing := await _find_by_hash(db, collection_id, doc.content_hash)) is not None:
         return _duplicate(existing)
+
+    chunker = chunking.chunker_for(doc.mime_type)
+    drafts = await asyncio.to_thread(chunker.chunk, doc)
 
     document = Document(
         collection_id=collection_id,
@@ -60,9 +66,26 @@ async def store_extracted(
             "requested_url": doc.requested_url,
             "status_code": doc.status_code,
             "fetched_at": doc.fetched_at.isoformat() if doc.fetched_at else None,
+            "chunker": chunker.name,
+            "chunker_version": chunker.version,
         },
         content=doc.model_dump(mode="json", exclude_defaults=True),
     )
+    document.chunks = [
+        Chunk(
+            collection_id=collection_id,
+            chunk_index=index,
+            content=draft.content,
+            token_count=draft.token_count,
+            meta={
+                "heading_path": draft.heading_path,
+                "blocks": [draft.block_start, draft.block_end],
+                "chunker": chunker.name,
+                "chunker_version": chunker.version,
+            },
+        )
+        for index, draft in enumerate(drafts)
+    ]
     db.add(document)
     try:
         await db.commit()
@@ -72,7 +95,12 @@ async def store_extracted(
         if existing is None:
             raise
         return _duplicate(existing)
-    return StoreResult(StoreOutcome.STORED, document.id)
+    return StoreResult(
+        StoreOutcome.STORED,
+        document.id,
+        chunks=len(drafts),
+        tokens=sum(d.token_count for d in drafts),
+    )
 
 
 async def crawl_and_store(
