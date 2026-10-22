@@ -9,8 +9,10 @@ from app.core.config import settings
 from app.core.logger import logger
 from app.core.trace import trace_id
 from app.db.session import async_session_factory, engine
+from app.models.chunk import Chunk
 from app.schemas.user import UserCreate
 from app.services import collection as collection_service
+from app.services import document as document_service
 from app.services import user as user_service
 from app.tasks import crawler as crawler_tasks
 
@@ -116,6 +118,31 @@ def crawl_url(url: str, collection: int = typer.Option(..., help="Collection id"
         raise typer.Exit(1)
     crawler_tasks.crawl_url.delay(url, trace_id.get(), collection)
     typer.echo(f"queued: {url} (trace {trace_id.get()})")
+
+
+async def _chunks(document_id: int) -> list[Chunk] | None:
+    async with async_session_factory() as db:
+        try:
+            if await document_service.get(db, document_id) is None:
+                return None
+            return await document_service.list_chunks(db, document_id)
+        finally:
+            await engine.dispose()
+
+
+@app.command()
+def show_chunks(document_id: int) -> None:
+    """Print a document's chunks: index, tokens, heading path, content."""
+    chunks = asyncio.run(_chunks(document_id))
+    if chunks is None:
+        typer.echo(f"document {document_id} not found", err=True)
+        raise typer.Exit(1)
+    for chunk in chunks:
+        path = " > ".join(chunk.meta.get("heading_path", [])) or "(no heading)"
+        typer.echo(f"--- chunk {chunk.chunk_index} | {chunk.token_count} tokens | {path}")
+        typer.echo(chunk.content)
+        typer.echo()
+    typer.echo(f"{len(chunks)} chunks")
 
 
 if __name__ == "__main__":

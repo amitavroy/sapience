@@ -20,7 +20,7 @@ def crawl_url(
         started = time.monotonic()
         try:
             # SYNC-EXCEPTION: Celery task bodies are sync; asyncio.run drives the async work
-            outcome, doc, stored = asyncio.run(ingest.crawl_and_store(url, collection_id))
+            _outcome, doc, stored = asyncio.run(ingest.crawl_and_store(url, collection_id))
         except crawler_service.RateLimited:
             # not a failure: re-queue without using up the failure retries
             if requeues >= MAX_RATE_LIMIT_REQUEUES:
@@ -53,7 +53,8 @@ def crawl_url(
             )
             return
 
-        if outcome is crawler_service.CrawlOutcome.ROBOTS_DISALLOWED:
+        # robots.txt is the only reason for no document; checking the values also narrows the types
+        if doc is None or stored is None:
             logger.info("skipped: disallowed by robots.txt ({})", url)
             return
 
