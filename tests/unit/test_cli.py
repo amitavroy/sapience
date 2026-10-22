@@ -8,7 +8,9 @@ from typer.testing import CliRunner
 
 from app.cli import __main__ as cli
 from app.db.base import Base
+from app.models.chunk import Chunk
 from app.models.collection import Collection, CollectionMember
+from app.models.document import Document
 from app.services import user as user_service
 
 ARGS = ["seed-user", "--email", "Seed@Example.com", "--password", "seedpass123"]
@@ -113,3 +115,48 @@ def test_create_collection_with_owner_adds_an_owner_membership(
     assert member.collection_id == collection.id
     assert member.role == "owner"
     assert collection.created_by_id == member.user_id
+
+
+def add_document_with_chunks(factory: async_sessionmaker) -> int:
+    async def run() -> int:
+        async with factory() as db:
+            collection = Collection(name="Docs")
+            db.add(collection)
+            await db.flush()
+            document = Document(collection_id=collection.id, title="T", content_hash="h")
+            # stored out of order: show-chunks must print in chunk_index order
+            document.chunks = [
+                Chunk(
+                    collection_id=collection.id,
+                    chunk_index=i,
+                    content=f"body {i}",
+                    token_count=10 + i,
+                    meta={"heading_path": ["Guide", "Install"] if i == 0 else []},
+                )
+                for i in (1, 0)
+            ]
+            db.add(document)
+            await db.commit()
+            return document.id
+
+    return asyncio.run(run())
+
+
+def test_show_chunks_prints_chunks_in_order(factory: async_sessionmaker) -> None:
+    document_id = add_document_with_chunks(factory)
+
+    result = CliRunner().invoke(cli.app, ["show-chunks", str(document_id)])
+
+    assert result.exit_code == 0
+    assert result.output.index("chunk 0 | 10 tokens | Guide > Install") < result.output.index(
+        "chunk 1 | 11 tokens | (no heading)"
+    )
+    assert "body 0" in result.output and "body 1" in result.output
+    assert "2 chunks" in result.output
+
+
+def test_show_chunks_exits_1_for_an_unknown_document(factory: async_sessionmaker) -> None:
+    result = CliRunner().invoke(cli.app, ["show-chunks", "999"])
+
+    assert result.exit_code == 1
+    assert "document 999 not found" in result.output

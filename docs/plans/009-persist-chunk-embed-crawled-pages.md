@@ -16,8 +16,8 @@ Each slice ends in a working, reviewable state. Pause for review after each slic
 | 2 | Chunk by section | `WebChunker` v1: block rendering, section packing (merge small sections in the same branch, split large sections at block boundaries, fold a tiny tail back), `heading_path` + block range in meta | [x] |
 | 2 | Chunk by section | Ingest: chunk in the same transaction as the document insert (through `asyncio.to_thread`); chunks stored with `embedding` NULL; log chunk count and total tokens | [x] |
 | 2 | Chunk by section | `cli show-chunks <document-id>`: prints each chunk's index, tokens, heading path and content | [x] |
-| 2 | Chunk by section | `SYNC-EXCEPTION` comment and a row in `docs/architecture/index.md` for chunking | [ ] |
-| 2 | Chunk by section | Tests: merging, splitting, no lost text, contiguous `chunk_index`, meta, registry, ingest stores chunks | [ ] |
+| 2 | Chunk by section | `SYNC-EXCEPTION` comment and a row in `docs/architecture/index.md` for chunking | [x] |
+| 2 | Chunk by section | Tests: merging, splitting, no lost text, contiguous `chunk_index`, meta, registry, ingest stores chunks | [x] |
 | 3 | Overlap and oversized blocks | Overlap tail (whole blocks or trailing sentences, up to `overlap_tokens`) between pieces of one split section; never across sections | [ ] |
 | 3 | Overlap and oversized blocks | Oversized-block splitting: paragraph/quote by sentences, list by items, table by rows with the header row repeated, code by lines, hard token cut as a last resort | [ ] |
 | 3 | Overlap and oversized blocks | Tests: overlap present inside a split section and absent across sections; every chunk ≤ `max_tokens`; table header repeated; code split on lines | [ ] |

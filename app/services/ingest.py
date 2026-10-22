@@ -52,6 +52,7 @@ async def store_extracted(
         return _duplicate(existing)
 
     chunker = chunking.chunker_for(doc.mime_type)
+    # SYNC-EXCEPTION: chunking is CPU-bound; called via asyncio.to_thread inside the Celery worker
     drafts = await asyncio.to_thread(chunker.chunk, doc)
 
     document = Document(

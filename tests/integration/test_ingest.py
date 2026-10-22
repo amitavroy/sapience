@@ -1,11 +1,12 @@
 from datetime import UTC, datetime
 
+import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Collection, Document, DocumentStatus
+from app.models import Chunk, Collection, Document, DocumentStatus
 from app.schemas.extracted_document import ExtractedDocument
-from app.services import ingest
+from app.services import chunking, ingest
 
 
 def make_doc(content_hash: str = "hash-1", **kwargs) -> ExtractedDocument:
@@ -107,4 +108,75 @@ async def test_missing_collection_stores_nothing(db_session: AsyncSession) -> No
 
     assert result.outcome is ingest.StoreOutcome.COLLECTION_MISSING
     assert result.document_id is None
+    assert await count_documents(db_session) == 0
+
+
+async def stored_chunks(db: AsyncSession) -> list[Chunk]:
+    return list((await db.scalars(select(Chunk).order_by(Chunk.chunk_index))).all())
+
+
+def make_long_doc() -> ExtractedDocument:
+    """Three sections of about 300 estimated tokens each, so the web chunker splits them."""
+    paragraph = " ".join(["lorem"] * 200)
+    blocks = []
+    sections = []
+    for name in ("One", "Two", "Three"):
+        start = len(blocks)
+        blocks += [
+            {"type": "heading", "text": name, "level": 1},
+            {"type": "paragraph", "text": f"{name} {paragraph}"},
+        ]
+        sections.append({"heading_path": [name], "start": start, "end": len(blocks)})
+    return make_doc(blocks=blocks, sections=sections, content_hash="long")
+
+
+async def test_stores_chunks_with_contiguous_index_and_no_embedding(
+    db_session: AsyncSession,
+) -> None:
+    collection = await make_collection(db_session)
+
+    result = await ingest.store_extracted(db_session, collection.id, make_long_doc())
+
+    chunks = await stored_chunks(db_session)
+    assert len(chunks) == result.chunks > 1
+    assert [c.chunk_index for c in chunks] == list(range(len(chunks)))
+    assert result.tokens == sum(c.token_count for c in chunks)
+    for chunk in chunks:
+        assert chunk.document_id == result.document_id
+        assert chunk.collection_id == collection.id
+        assert chunk.embedding is None
+        assert chunk.token_count > 0
+    assert [c.meta["heading_path"] for c in chunks] == [["One"], ["Two"], ["Three"]]
+    assert chunks[0].meta["blocks"] == [0, 2]
+    assert chunks[0].meta["chunker"] == "web"
+    assert chunks[0].meta["chunker_version"] == 1
+
+
+async def test_document_meta_records_the_chunker(db_session: AsyncSession) -> None:
+    collection = await make_collection(db_session)
+
+    result = await ingest.store_extracted(db_session, collection.id, make_doc())
+
+    document = await db_session.get(Document, result.document_id)
+    assert document.meta["chunker"] == "web"
+    assert document.meta["chunker_version"] == 1
+
+
+async def test_a_duplicate_stores_no_extra_chunks(db_session: AsyncSession) -> None:
+    collection = await make_collection(db_session)
+    first = await ingest.store_extracted(db_session, collection.id, make_long_doc())
+
+    await ingest.store_extracted(db_session, collection.id, make_long_doc())
+
+    assert len(await stored_chunks(db_session)) == first.chunks
+
+
+async def test_a_mime_type_without_a_chunker_stores_nothing(db_session: AsyncSession) -> None:
+    collection = await make_collection(db_session)
+
+    with pytest.raises(chunking.NoChunkerError):
+        await ingest.store_extracted(
+            db_session, collection.id, make_doc(mime_type="application/pdf")
+        )
+
     assert await count_documents(db_session) == 0

@@ -65,6 +65,7 @@ Some things have no async option: a sync-only library, a blocking SDK, CPU-bound
 | `app/cli/__main__.py` | Typer commands are sync entry points | Typer has no native async support | Each command calls `asyncio.run(...)` for async work |
 | `app/core/security.py` | Argon2 password hashing and verification | CPU-bound; pwdlib has no async API | Called through `asyncio.to_thread`, so the event loop stays free |
 | `app/services/web_extractor.py` | HTML parsing and block extraction with selectolax | CPU-bound; selectolax has no async API | Called through `asyncio.to_thread`; runs in the Celery worker |
+| `app/services/chunking/` | Splitting an extracted document into chunks | CPU-bound pure-Python work; no I/O to await | Called through `asyncio.to_thread`; runs in the Celery worker |
 
 ### Known risks
 
