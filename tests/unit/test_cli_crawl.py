@@ -38,3 +38,27 @@ def test_crawl_url_rejects_non_http_urls(queued: list[tuple], url: str) -> None:
 
     assert result.exit_code == 1
     assert queued == []
+
+
+def test_crawl_url_requires_a_collection(queued: list[tuple]) -> None:
+    result = CliRunner().invoke(cli.app, ["crawl-url", "https://example.com/page"])
+
+    assert result.exit_code != 0
+    assert queued == []
+
+
+def test_crawl_url_rejects_an_unknown_collection(
+    queued: list[tuple], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def missing(_collection_id: int) -> bool:
+        return False
+
+    monkeypatch.setattr(cli, "_collection_exists", missing)
+
+    result = CliRunner().invoke(
+        cli.app, ["crawl-url", "https://example.com/page", "--collection", "9"]
+    )
+
+    assert result.exit_code == 1
+    assert "collection 9 not found" in result.output
+    assert queued == []

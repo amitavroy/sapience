@@ -108,8 +108,16 @@ def retries(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
     def fake_retry(*, countdown: int, args: tuple, kwargs: dict) -> None:
         # like Celery, the retried call is args + kwargs, so none of them may repeat
         assert set(kwargs) == {"attempt", "requeues"}
-        url, trace_id, _collection_id = args
-        calls.append({"countdown": countdown, "url": url, "trace_id": trace_id, **kwargs})
+        url, trace_id, collection_id = args
+        calls.append(
+            {
+                "countdown": countdown,
+                "url": url,
+                "trace_id": trace_id,
+                "collection_id": collection_id,
+                **kwargs,
+            }
+        )
         raise Retry()
 
     monkeypatch.setattr(crawler_tasks.crawl_url, "retry", fake_retry)
@@ -140,6 +148,7 @@ def test_500_retries_after_3_seconds_then_the_retry_succeeds(
             "countdown": 3,
             "url": "https://a.test/p",
             "trace_id": "trace1234",
+            "collection_id": 1,
             "attempt": 1,
             "requeues": 0,
         }
@@ -290,3 +299,59 @@ def test_robots_disallowed_page_is_skipped_with_an_info_line(
     ]
     assert retries == []
     assert warnings(logs) == []
+
+
+def test_requeue_args_carry_the_collection_id(
+    retries: list[dict], serve, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    serve(httpx.Response(200, content=b"<p>hi</p>", headers=HTML))
+    deny_rate_limit(monkeypatch)
+
+    with pytest.raises(Retry):
+        crawler_tasks.crawl_url("https://a.test/p", "t", 42)
+
+    assert retries[0]["collection_id"] == 42
+
+
+def stub_store(monkeypatch: pytest.MonkeyPatch, result: ingest.StoreResult) -> None:
+    async def store(_db, _collection_id, _doc) -> ingest.StoreResult:
+        return result
+
+    monkeypatch.setattr(ingest, "store_extracted", store)
+
+
+def infos(logs: list[dict]) -> list[str]:
+    return [r["message"] for r in logs if r["level"].name == "INFO"]
+
+
+def test_stored_page_logs_the_document_id(
+    logs: list[dict], serve, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    serve(httpx.Response(200, content=b"<p>hi</p>", headers=HTML))
+    stub_store(monkeypatch, ingest.StoreResult(ingest.StoreOutcome.STORED, 7))
+
+    crawler_tasks.crawl_url("https://a.test/p", "t", 1)
+
+    assert "stored document 7" in infos(logs)
+
+
+def test_duplicate_page_logs_the_existing_document_id(
+    logs: list[dict], serve, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    serve(httpx.Response(200, content=b"<p>hi</p>", headers=HTML))
+    stub_store(monkeypatch, ingest.StoreResult(ingest.StoreOutcome.DUPLICATE, 3, "pending"))
+
+    crawler_tasks.crawl_url("https://a.test/p", "t", 1)
+
+    assert "duplicate of document 3" in infos(logs)
+
+
+def test_missing_collection_logs_a_warning_without_raising(
+    logs: list[dict], serve, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    serve(httpx.Response(200, content=b"<p>hi</p>", headers=HTML))
+    stub_store(monkeypatch, ingest.StoreResult(ingest.StoreOutcome.COLLECTION_MISSING))
+
+    crawler_tasks.crawl_url("https://a.test/p", "t", 99)
+
+    assert warnings(logs) == ["collection 99 not found"]

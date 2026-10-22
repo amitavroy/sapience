@@ -1,0 +1,110 @@
+from datetime import UTC, datetime
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models import Collection, Document, DocumentStatus
+from app.schemas.extracted_document import ExtractedDocument
+from app.services import ingest
+
+
+def make_doc(content_hash: str = "hash-1", **kwargs) -> ExtractedDocument:
+    fields = {
+        "source_uri": "https://a.test/final",
+        "title": "A page",
+        "mime_type": "text/html",
+        "content_hash": content_hash,
+        "requested_url": "https://a.test/start",
+        "status_code": 200,
+        "fetched_at": datetime(2026, 10, 21, 9, 0, tzinfo=UTC),
+        "metadata": {"language": "en"},
+        "blocks": [{"type": "paragraph", "text": "Hello world"}],
+    }
+    return ExtractedDocument(**{**fields, **kwargs})
+
+
+async def make_collection(db: AsyncSession, name: str = "Docs") -> Collection:
+    collection = Collection(name=name)
+    db.add(collection)
+    await db.commit()
+    return collection
+
+
+async def count_documents(db: AsyncSession) -> int:
+    return await db.scalar(select(func.count()).select_from(Document))
+
+
+async def test_stores_a_pending_document_with_mapped_columns(db_session: AsyncSession) -> None:
+    collection = await make_collection(db_session)
+    doc = make_doc()
+
+    result = await ingest.store_extracted(db_session, collection.id, doc)
+
+    assert result.outcome is ingest.StoreOutcome.STORED
+    document = await db_session.get(Document, result.document_id)
+    assert document.status == DocumentStatus.PENDING
+    assert document.collection_id == collection.id
+    assert document.title == "A page"
+    assert document.source_uri == "https://a.test/final"
+    assert document.mime_type == "text/html"
+    assert document.content_hash == "hash-1"
+    assert document.meta["language"] == "en"
+    assert document.meta["requested_url"] == "https://a.test/start"
+    assert document.meta["status_code"] == 200
+    assert document.meta["fetched_at"].startswith("2026-10-21T09:00")
+    assert document.uploaded_by_id is None
+
+
+async def test_content_round_trips_into_an_extracted_document(db_session: AsyncSession) -> None:
+    collection = await make_collection(db_session)
+    doc = make_doc()
+    result = await ingest.store_extracted(db_session, collection.id, doc)
+
+    # select the column itself: it is deferred, so lazy-loading it on the model fails in async
+    content = await db_session.scalar(
+        select(Document.content).where(Document.id == result.document_id)
+    )
+
+    assert ExtractedDocument.model_validate(content) == doc
+
+
+async def test_long_title_and_source_uri_are_truncated(db_session: AsyncSession) -> None:
+    collection = await make_collection(db_session)
+    doc = make_doc(title="t" * 600, source_uri="https://a.test/" + "p" * 1100)
+
+    result = await ingest.store_extracted(db_session, collection.id, doc)
+
+    document = await db_session.get(Document, result.document_id)
+    assert len(document.title) == 500
+    assert len(document.source_uri) == 1000
+
+
+async def test_same_hash_in_the_same_collection_is_a_duplicate(db_session: AsyncSession) -> None:
+    collection = await make_collection(db_session)
+    first = await ingest.store_extracted(db_session, collection.id, make_doc())
+
+    second = await ingest.store_extracted(db_session, collection.id, make_doc())
+
+    assert second.outcome is ingest.StoreOutcome.DUPLICATE
+    assert second.document_id == first.document_id
+    assert second.status == DocumentStatus.PENDING
+    assert await count_documents(db_session) == 1
+
+
+async def test_same_hash_in_another_collection_is_stored(db_session: AsyncSession) -> None:
+    one = await make_collection(db_session, "One")
+    two = await make_collection(db_session, "Two")
+    await ingest.store_extracted(db_session, one.id, make_doc())
+
+    result = await ingest.store_extracted(db_session, two.id, make_doc())
+
+    assert result.outcome is ingest.StoreOutcome.STORED
+    assert await count_documents(db_session) == 2
+
+
+async def test_missing_collection_stores_nothing(db_session: AsyncSession) -> None:
+    result = await ingest.store_extracted(db_session, 999, make_doc())
+
+    assert result.outcome is ingest.StoreOutcome.COLLECTION_MISSING
+    assert result.document_id is None
+    assert await count_documents(db_session) == 0

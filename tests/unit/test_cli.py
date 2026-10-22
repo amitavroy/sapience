@@ -1,12 +1,14 @@
 import asyncio
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 from typer.testing import CliRunner
 
 from app.cli import __main__ as cli
 from app.db.base import Base
+from app.models.collection import Collection, CollectionMember
 from app.services import user as user_service
 
 ARGS = ["seed-user", "--email", "Seed@Example.com", "--password", "seedpass123"]
@@ -63,3 +65,51 @@ def test_seed_user_refuses_without_debug(
     assert refused.exit_code != 0
     assert "DEBUG" in refused.output
     assert forced.exit_code == 0
+
+
+def fetch_all(factory: async_sessionmaker, model):
+    async def run():
+        async with factory() as db:
+            return list((await db.scalars(select(model))).all())
+
+    return asyncio.run(run())
+
+
+def test_create_collection_prints_the_id(factory: async_sessionmaker) -> None:
+    result = CliRunner().invoke(
+        cli.app, ["create-collection", "Docs", "--description", "Python docs"]
+    )
+
+    assert result.exit_code == 0
+    [collection] = fetch_all(factory, Collection)
+    assert f"collection created: {collection.id} (Docs)" in result.output
+    assert collection.description == "Python docs"
+    assert fetch_all(factory, CollectionMember) == []
+
+
+def test_create_collection_with_unknown_owner_exits_1(factory: async_sessionmaker) -> None:
+    result = CliRunner().invoke(
+        cli.app, ["create-collection", "Docs", "--owner-email", "nobody@example.com"]
+    )
+
+    assert result.exit_code == 1
+    assert "nobody@example.com not found" in result.output
+    assert fetch_all(factory, Collection) == []
+
+
+def test_create_collection_with_owner_adds_an_owner_membership(
+    factory: async_sessionmaker,
+) -> None:
+    runner = CliRunner()
+    runner.invoke(cli.app, ARGS)
+
+    result = runner.invoke(
+        cli.app, ["create-collection", "Docs", "--owner-email", "seed@example.com"]
+    )
+
+    assert result.exit_code == 0
+    [collection] = fetch_all(factory, Collection)
+    [member] = fetch_all(factory, CollectionMember)
+    assert member.collection_id == collection.id
+    assert member.role == "owner"
+    assert collection.created_by_id == member.user_id
