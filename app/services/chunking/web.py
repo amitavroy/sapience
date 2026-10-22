@@ -1,6 +1,6 @@
 import os.path
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from app.schemas.extracted_document import Block, ExtractedDocument
@@ -104,19 +104,85 @@ class WebChunker:
         for heading_path, start, end in sections:
             pieces = []
             for index in range(start, end):
-                text = render_block(doc.blocks[index])
-                if text.strip():
+                block = doc.blocks[index]
+                text = render_block(block)
+                if not text.strip():
+                    continue
+                tokens = self.count_tokens(text)
+                texts = self._split_block(block, text) if tokens > self.max_tokens else [text]
+                for part in texts:
                     pieces.append(
                         _Piece(
                             index,
-                            text,
-                            self.count_tokens(text),
-                            heading=doc.blocks[index].type == "heading",
+                            part,
+                            self.count_tokens(part),
+                            heading=block.type == "heading",
                         )
                     )
             if pieces:
                 units.append(_Unit(list(heading_path), pieces))
         return units
+
+    def _split_block(self, block: Block, text: str) -> list[str]:
+        """Split one block that is over `max_tokens` into rendered pieces that each fit."""
+        match block.type:
+            case "list":
+                pieces = self._pack(
+                    block.items, lambda items: render_block(Block(type="list", items=list(items)))
+                )
+            case "table" if len(block.rows) > 1:
+                # the first row is repeated at the top of every piece
+                header = block.rows[0]
+                pieces = self._pack(
+                    block.rows[1:],
+                    lambda rows: render_block(Block(type="table", rows=[header, *rows])),
+                )
+            case "code":
+                pieces = self._pack(
+                    block.text.split("\n"),
+                    lambda lines: render_block(Block(type="code", text="\n".join(lines))),
+                )
+            case "quote":
+                pieces = self._pack(
+                    split_sentences(block.text),
+                    lambda parts: render_block(Block(type="quote", text=" ".join(parts))),
+                )
+            case _:
+                pieces = self._pack(split_sentences(block.text), " ".join)
+        # last resort: one sentence, item, row or line that is still too big
+        return [cut for piece in pieces for cut in self._hard_cut(piece)]
+
+    def _pack(self, items: Sequence[str], render: Callable[[Sequence[str]], str]) -> list[str]:
+        """Group whole items into rendered pieces of at most `target_tokens` where possible."""
+        pieces: list[str] = []
+        current: list[str] = []
+        for item in items:
+            if current and self.count_tokens(render([*current, item])) > self.target_tokens:
+                pieces.append(render(current))
+                current = []
+            current.append(item)
+        if current:
+            pieces.append(render(current))
+        return pieces
+
+    def _hard_cut(self, text: str) -> list[str]:
+        """Windows of about `max_tokens * 4` characters, cut back to the last space when there is
+        one. The window is shrunk until the counter agrees that the part fits."""
+        parts: list[str] = []
+        while text:
+            cut = len(text)
+            if cut > self.max_tokens * 4:
+                cut = text.rfind(" ", 0, self.max_tokens * 4)
+                cut = self.max_tokens * 4 if cut <= 0 else cut
+            part = text[:cut]
+            while (tokens := self.count_tokens(part)) > self.max_tokens and len(part) > 1:
+                cut = max(1, len(part) * self.max_tokens // tokens)
+                space = part.rfind(" ", 0, cut)
+                cut = space if space > 0 else cut
+                part = text[:cut]
+            parts.append(part.rstrip())
+            text = text[cut:].lstrip()
+        return parts
 
     def _fits(self, current: list[_Unit], unit: _Unit) -> bool:
         size = sum(u.tokens for u in current)
@@ -152,6 +218,10 @@ class WebChunker:
                 groups.append([])
                 tails.append(tail)
                 size = self.count_tokens(tail) if tail else 0
+            if not groups[-1] and size + piece.tokens > self.max_tokens:
+                # the overlap would push a big first block over the cap: drop the overlap
+                tails[-1] = ""
+                size = 0
             groups[-1].append(piece)
             size += piece.tokens
         # a tiny tail reads badly on its own: fold it back if the result stays within the cap
@@ -168,7 +238,7 @@ class WebChunker:
     def _overlap_tail(self, pieces: list[_Piece]) -> str:
         """The end of a piece, to repeat at the start of the next: whole trailing blocks that fit
         in `overlap_tokens`, else the trailing sentences of the last block. Never a cut word."""
-        if self.overlap_tokens <= 0:
+        if self.overlap_tokens <= 0 or pieces[-1].heading:  # a lone heading is no context
             return ""
         taken: list[_Piece] = []
         size = 0

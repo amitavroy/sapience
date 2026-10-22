@@ -2,7 +2,7 @@ import pytest
 
 from app.schemas.extracted_document import Block, ExtractedDocument, Section
 from app.services.chunking import NoChunkerError, WebChunker, chunker_for, estimate_tokens
-from app.services.chunking.web import render_block
+from app.services.chunking.web import render_block, split_sentences
 
 
 def words(n: int, word: str = "w") -> str:
@@ -196,3 +196,154 @@ def test_html_mime_types_use_the_web_chunker(mime_type: str) -> None:
 def test_a_mime_type_without_a_strategy_raises() -> None:
     with pytest.raises(NoChunkerError):
         chunker_for("application/pdf")
+
+
+def sentence_block(sentences: list[str]) -> Block:
+    return Block(type="paragraph", text=" ".join(sentences))
+
+
+def test_a_split_section_overlaps_with_the_trailing_block_of_the_previous_piece() -> None:
+    first, second, third = para(12, "aa"), para(12, "bb"), para(12, "cc")
+    doc = make_doc((["Big"], [first, second, third]))
+
+    chunks = chunker(target_tokens=20, overlap_tokens=12).chunk(doc)
+
+    assert [c.content for c in chunks] == [
+        first.text,
+        f"{first.text}\n\n{second.text}",
+        f"{second.text}\n\n{third.text}",
+    ]
+    # ranges cover each piece's own blocks, not the repeated tail
+    assert [(c.block_start, c.block_end) for c in chunks] == [(0, 1), (1, 2), (2, 3)]
+
+
+def test_overlap_falls_back_to_trailing_sentences_when_the_last_block_is_big() -> None:
+    long_block = sentence_block(["One two three.", "Four five six.", "Seven eight nine."])
+    doc = make_doc((["Big"], [long_block, para(15, "next")]))
+
+    chunks = chunker(target_tokens=12, max_tokens=40, overlap_tokens=6).chunk(doc)
+
+    # all 9 words would not fit in 6, so only the trailing sentences that fit are repeated
+    assert chunks[1].content.startswith("Four five six. Seven eight nine.")
+    assert "One two three." not in chunks[1].content
+
+
+def test_no_overlap_when_not_even_one_sentence_fits() -> None:
+    doc = make_doc((["Big"], [para(15, "aa"), para(15, "bb")]))
+
+    chunks = chunker(target_tokens=20, overlap_tokens=5).chunk(doc)
+
+    assert chunks[1].content == para(15, "bb").text
+
+
+def test_no_overlap_between_sections_or_merged_chunks() -> None:
+    doc = make_doc(
+        (["A"], [heading("A"), para(20, "aa")]),
+        (["B"], [heading("B"), para(20, "bb")]),
+    )
+
+    chunks = chunker(target_tokens=25, overlap_tokens=20).chunk(doc)
+
+    assert [c.heading_path for c in chunks] == [["A"], ["B"]]
+    assert "aa" not in chunks[1].content
+
+
+def test_overlap_counts_toward_the_chunk_size() -> None:
+    doc = make_doc((["Big"], [para(14, f"w{i}") for i in range(6)]))
+
+    chunks = chunker(target_tokens=30, max_tokens=60, overlap_tokens=14).chunk(doc)
+
+    assert len(chunks) > 1
+    assert all(c.token_count <= 30 for c in chunks)
+
+
+def test_an_oversized_paragraph_is_split_on_sentences() -> None:
+    sentences = [f"Sentence number {i} is here." for i in range(20)]
+    doc = make_doc((["X"], [sentence_block(sentences)]))
+
+    chunks = chunker().chunk(doc)
+
+    assert len(chunks) > 1
+    assert all(c.token_count <= 60 for c in chunks)
+    assert all(c.content.endswith(".") for c in chunks)
+    assert " ".join(c.content for c in chunks) == " ".join(sentences)
+
+
+def test_an_oversized_list_is_split_on_whole_items() -> None:
+    items = [f"item {i} with a few words" for i in range(30)]
+    doc = make_doc((["X"], [Block(type="list", items=items)]))
+
+    chunks = chunker().chunk(doc)
+
+    assert len(chunks) > 1
+    assert all(c.token_count <= 60 for c in chunks)
+    lines = [line for c in chunks for line in c.content.splitlines()]
+    assert lines == [f"- {item}" for item in items]
+
+
+def test_an_oversized_table_repeats_its_header_row() -> None:
+    rows = [["name", "value"]] + [[f"row{i}", "v v v"] for i in range(40)]
+    doc = make_doc((["X"], [Block(type="table", rows=rows)]))
+
+    chunks = chunker().chunk(doc)
+
+    assert len(chunks) > 1
+    assert all(c.content.splitlines()[0] == "name | value" for c in chunks)
+    assert all(c.token_count <= 60 for c in chunks)
+    body = [line for c in chunks for line in c.content.splitlines() if line != "name | value"]
+    assert body == [f"row{i} | v v v" for i in range(40)]
+
+
+def test_oversized_code_is_split_on_lines_and_every_piece_is_fenced() -> None:
+    lines = [f"x{i} = {i} + 1 + 2 + 3" for i in range(60)]
+    doc = make_doc((["X"], [Block(type="code", text="\n".join(lines))]))
+
+    chunks = chunker().chunk(doc)
+
+    assert len(chunks) > 1
+    assert all(c.token_count <= 60 for c in chunks)
+    for chunk in chunks:
+        assert chunk.content.startswith("```\n") and chunk.content.endswith("\n```")
+    body = [ln for c in chunks for ln in c.content.splitlines() if ln != "```"]
+    assert body == lines
+
+
+def test_text_without_any_break_is_cut_to_fit_as_a_last_resort() -> None:
+    doc = make_doc((["X"], [Block(type="paragraph", text="x" * 2000)]))
+
+    chunks = WebChunker(target_tokens=100, max_tokens=200, min_tokens=10).chunk(doc)
+
+    assert all(c.token_count <= 200 for c in chunks)
+    assert "".join(c.content for c in chunks) == "x" * 2000
+
+
+def test_a_hard_cut_prefers_whitespace() -> None:
+    text = " ".join(["word"] * 400)
+    doc = make_doc((["X"], [Block(type="paragraph", text=text)]))
+
+    chunks = WebChunker(target_tokens=100, max_tokens=200, min_tokens=10).chunk(doc)
+
+    assert len(chunks) > 1
+    assert all(chunk.content.split() == ["word"] * len(chunk.content.split()) for chunk in chunks)
+
+
+def test_every_chunk_stays_within_max_tokens_with_overlap_on() -> None:
+    doc = make_doc(
+        (["A"], [heading("A"), para(120, "aa"), Block(type="list", items=["i " * 5] * 40)]),
+        (["B"], [heading("B"), sentence_block(["Some words go here."] * 30)]),
+    )
+
+    chunks = chunker(overlap_tokens=10).chunk(doc)
+
+    assert all(c.token_count <= 60 for c in chunks)
+
+
+def test_sentence_splitter_keeps_punctuation_and_ignores_decimals() -> None:
+    assert split_sentences("Pi is 3.14 today. The end! 9 lives? Done.") == [
+        "Pi is 3.14 today.",
+        "The end!",
+        "9 lives?",
+        "Done.",
+    ]
+    assert split_sentences("one. two") == ["one. two"]  # lowercase after the period: no split
+    assert split_sentences("") == []

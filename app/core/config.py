@@ -33,6 +33,15 @@ class Settings(BaseSettings):
     crawler_max_bytes: int = 5 * 1024 * 1024  # cap on the decompressed response body
     crawler_rate_limit: str = "1/second"  # per host, in `limits` syntax
     crawler_robots_cache_seconds: int = 3600  # per host, per worker process
+    # embeddings: an OpenAI-compatible API, OpenRouter by default
+    embedding_provider: Literal["openrouter", "openai"] = "openrouter"
+    # empty = the provider's default (https://openrouter.ai/api/v1 for OpenRouter)
+    embedding_base_url: str = ""
+    embedding_api_key: str = ""  # empty = every embed fails permanently with a clear error
+    # provider-specific id (`text-embedding-3-small` on OpenAI); must give EMBEDDING_DIM dimensions
+    embedding_model: str = "openai/text-embedding-3-small"
+    embedding_batch_size: int = 100  # chunks per API call
+    embedding_timeout_seconds: float = 30  # per API call
     # dev-only defaults for `cli seed-user`
     seed_user_name: str = "Admin"
     seed_user_email: str = "admin@example.com"
