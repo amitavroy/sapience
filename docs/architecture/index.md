@@ -1,5 +1,17 @@
 # Architecture
 
+## Layers
+
+### Persistence lives in services
+
+Routes and Celery tasks do not persist data. They contain no `db.add`, `db.commit`, `db.execute` or `db.delete`, no queries, and no session or transaction handling (this includes opening a session with `task_session()`). All reads and writes of our own tables, and the transaction around them, belong in `app/services/`.
+
+- **Routes and tasks are thin.** They parse input, call a service, map the result to a response or a log line, and handle retries or HTTP status codes. Business rules and persistence stay out of them.
+- **A service owns its transaction.** It commits (or rolls back) and reports the outcome as a return value or a domain exception.
+- **Route services** take the request's `AsyncSession`, passed in with `Depends`. **Task-facing services** that must open their own session do so with `task_session()` inside the service, because a task has no request scope.
+- **The CLI follows the same rule:** commands may open a session (and dispose the engine), but queries and writes go through services.
+- **Reviewers:** persistence code in a route, task or CLI command is a defect; move it into a service.
+
 ## Async first
 
 This project is async by default for **I/O-bound** work (database, Redis, outbound HTTP, LLM APIs). Use async wherever the stack allows it.

@@ -5,7 +5,7 @@ import time
 from app.core.celery_app import celery_app
 from app.core.logger import logger
 from app.services import crawler as crawler_service
-from app.services import web_extractor
+from app.services import ingest, web_extractor
 
 RETRY_DELAYS = (3, 5, 15)  # seconds before failure retries 1, 2 and 3
 MAX_RATE_LIMIT_REQUEUES = 60  # only reached when one host is flooded with tasks
@@ -20,7 +20,7 @@ def crawl_url(
         started = time.monotonic()
         try:
             # SYNC-EXCEPTION: Celery task bodies are sync; asyncio.run drives the async work
-            outcome, doc = asyncio.run(crawler_service.crawl_page(url))
+            outcome, doc, stored = asyncio.run(ingest.crawl_and_store(url, collection_id))
         except crawler_service.RateLimited:
             # not a failure: re-queue without using up the failure retries
             if requeues >= MAX_RATE_LIMIT_REQUEUES:
@@ -73,3 +73,11 @@ def crawl_url(
             duration_ms,
         )
         logger.debug("extracted document: {}", doc.model_dump_json(exclude_defaults=True))
+
+        match stored.outcome:
+            case ingest.StoreOutcome.STORED:
+                logger.info("stored document {}", stored.document_id)
+            case ingest.StoreOutcome.DUPLICATE:
+                logger.info("duplicate of document {}", stored.document_id)
+            case ingest.StoreOutcome.COLLECTION_MISSING:
+                logger.warning("collection {} not found", collection_id)

@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
@@ -6,6 +7,7 @@ from celery.exceptions import Retry
 
 from app.core.logger import logger
 from app.services import crawler as crawler_service
+from app.services import ingest
 from app.tasks import crawler as crawler_tasks
 
 PAGES = Path(__file__).parent.parent / "fixtures" / "pages"
@@ -42,6 +44,21 @@ def robots_open(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(crawler_service, "_robots_allows", allow)
 
 
+@pytest.fixture(autouse=True)
+def store_stub(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No database in these tests: storing the page always succeeds."""
+
+    async def store(_db, _collection_id, _doc) -> ingest.StoreResult:
+        return ingest.StoreResult(ingest.StoreOutcome.STORED, 7)
+
+    @asynccontextmanager
+    async def session():
+        yield None
+
+    monkeypatch.setattr(ingest, "store_extracted", store)
+    monkeypatch.setattr(ingest, "task_session", session)
+
+
 @pytest.fixture
 def serve(monkeypatch: pytest.MonkeyPatch):
     """Make the task's HTTP client answer every request with the given response."""
@@ -62,7 +79,7 @@ def test_success_logs_the_summary_at_info_and_the_json_at_debug(logs: list[dict]
     # sync test: the task drives its async body with asyncio.run, like the real worker
     crawler_tasks.crawl_url("https://a.test/p", "trace1234", 1)
 
-    [summary] = [r for r in logs if r["level"].name == "INFO"]
+    [summary] = [r for r in logs if r["message"].startswith("crawled ")]
     assert summary["message"].startswith("crawled https://a.test/p source_uri=https://a.test/p")
     assert "title='Scripts page'" in summary["message"]
     assert "blocks=2 sections=1 links=0 text_length=" in summary["message"]
