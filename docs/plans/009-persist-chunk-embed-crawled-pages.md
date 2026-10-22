@@ -12,8 +12,8 @@ Each slice ends in a working, reviewable state. Pause for review after each slic
 | 1 | Store the page | `app/services/ingest.py`: `store_extracted(db, collection_id, doc)` inserts a `pending` `Document` with `content`, or reports `DUPLICATE` / `COLLECTION_MISSING` | [x] |
 | 1 | Store the page | `crawl_url` task: after extraction, call the ingest service and log `stored document <id>` / `duplicate of document <id>` / `collection <id> not found` | [x] |
 | 1 | Store the page | Tests: create-collection, crawl-url validation and enqueue, ingest stores, duplicate, missing collection, task retry args carry `collection_id` | [x] |
-| 2 | Chunk by section | `app/services/chunking/`: `Chunker` protocol, `ChunkDraft`, `chunker_for(mime_type)` registry, `estimate_tokens` (characters ÷ 4, no dependency) | [ ] |
-| 2 | Chunk by section | `WebChunker` v1: block rendering, section packing (merge small sections in the same branch, split large sections at block boundaries, fold a tiny tail back), `heading_path` + block range in meta | [ ] |
+| 2 | Chunk by section | `app/services/chunking/`: `Chunker` protocol, `ChunkDraft`, `chunker_for(mime_type)` registry, `estimate_tokens` (characters ÷ 4, no dependency) | [x] |
+| 2 | Chunk by section | `WebChunker` v1: block rendering, section packing (merge small sections in the same branch, split large sections at block boundaries, fold a tiny tail back), `heading_path` + block range in meta | [x] |
 | 2 | Chunk by section | Ingest: chunk in the same transaction as the document insert (through `asyncio.to_thread`); chunks stored with `embedding` NULL; log chunk count and total tokens | [ ] |
 | 2 | Chunk by section | `cli show-chunks <document-id>`: prints each chunk's index, tokens, heading path and content | [ ] |
 | 2 | Chunk by section | `SYNC-EXCEPTION` comment and a row in `docs/architecture/index.md` for chunking | [ ] |
