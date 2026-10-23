@@ -100,4 +100,8 @@ Google Chat @mentions and slash commands arrive at `POST /ingest/google-chat`. T
 
 # Web page crawl
 
-`uv run python -m app.cli crawl-url <url>` queues a crawl of one web page. A Celery worker checks robots.txt, waits for the per-host rate limit, fetches the page, extracts structured content (blocks, sections, links, hash) and logs a summary. Nothing is persisted yet. Command, output structure, politeness, retries, settings and limits: [web-crawl.md](web-crawl.md).
+`uv run cli crawl-url <url> --collection <id>` queues a crawl of one web page into a collection. A Celery worker checks robots.txt, waits for the per-host rate limit, fetches the page, extracts structured content (blocks, sections, links, hash), then stores it (see Ingestion below). Command, output structure, politeness, retries, settings and limits: [web-crawl.md](web-crawl.md).
+
+# Ingestion: store, chunk, embed
+
+A crawled page becomes a `pending` document with chunks, and a second task embeds the chunks (`pending` → `processing` → `ready`, or `failed`). Chunking is structure-aware: it follows headings, merges small sections, splits large ones with overlap, and is chosen by MIME type. Embeddings come from an OpenAI-compatible API (OpenRouter by default). Commands, statuses, chunking rules, retries, settings and limits: [ingestion.md](ingestion.md).

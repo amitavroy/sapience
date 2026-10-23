@@ -1,10 +1,10 @@
 # Web page crawl
 
-`uv run python -m app.cli crawl-url <url>` queues a crawl of one web page. It prints `queued: <url> (trace <id>)` and returns; the result appears in the worker log under that trace id. Only `http` and `https` URLs are accepted (exit code 1 otherwise). Nothing is persisted yet, and links are collected but not followed.
+`uv run cli crawl-url <url> --collection <id>` queues a crawl of one web page into a collection. It prints `queued: <url> (trace <id>)` and returns; the result appears in the worker log under that trace id. Only `http` and `https` URLs are accepted, and the collection must exist (exit code 1 otherwise). After extraction the page is stored, chunked and embedded: see [ingestion.md](ingestion.md). Links are collected but not followed.
 
-    CLI → crawl_url task → robots.txt → per-host rate limit → fetch → extract → log
+    CLI → crawl_url task → robots.txt → per-host rate limit → fetch → extract → store + chunk → embed_document
 
-- **Task:** `crawl_url` (`app/tasks/crawler.py`) logs one INFO line (`crawled <url> source_uri=… status=… title=… blocks=… sections=… links=… text_length=… content_hash=… duration_ms=…`) and the full `ExtractedDocument` JSON at DEBUG. Set `LOG_FILE_LEVEL=DEBUG` to see the JSON in the log file.
+- **Task:** `crawl_url` (`app/tasks/crawler.py`, arguments `url`, `trace_id`, `collection_id`) stores the page, enqueues `embed_document` and logs one INFO line (`crawled <url> source_uri=… status=… title=… blocks=… sections=… links=… text_length=… content_hash=… duration_ms=…`) and the full `ExtractedDocument` JSON at DEBUG. Set `LOG_FILE_LEVEL=DEBUG` to see the JSON in the log file.
 - **Code:** the task is thin. `app/services/crawler.py` does robots.txt and the rate limit, and `app/services/web_extractor.py` fetches and extracts. The parser is `selectolax` (new dependency).
 - **Fetch:** one GET with a browser user agent, following redirects. Any final 4xx or 5xx is an error, never extracted. Only `text/html` and `application/xhtml+xml` are accepted (a missing content type is sniffed). The body is read as a stream and cut off at `CRAWLER_MAX_BYTES`, counted after decompression. Charset comes from the header, then `<meta>`, then UTF-8.
 
