@@ -56,7 +56,7 @@ def store_stub(monkeypatch: pytest.MonkeyPatch) -> None:
         yield None
 
     monkeypatch.setattr(ingest, "store_extracted", store)
-    monkeypatch.setattr(ingest, "task_session", session)
+    monkeypatch.setattr(crawler_tasks, "task_session", session)
 
 
 @pytest.fixture

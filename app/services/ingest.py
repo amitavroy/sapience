@@ -6,13 +6,11 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import task_session
 from app.models.chunk import Chunk
 from app.models.document import Document, DocumentStatus
 from app.schemas.extracted_document import ExtractedDocument
 from app.services import chunking
 from app.services import collection as collection_service
-from app.services import crawler as crawler_service
 
 
 class StoreOutcome(StrEnum):
@@ -102,14 +100,3 @@ async def store_extracted(
         chunks=len(drafts),
         tokens=sum(d.token_count for d in drafts),
     )
-
-
-async def crawl_and_store(
-    url: str, collection_id: int
-) -> tuple[crawler_service.CrawlOutcome, ExtractedDocument | None, StoreResult | None]:
-    """Crawl one page and store it, for Celery tasks, which have no request-scoped session."""
-    outcome, doc = await crawler_service.crawl_page(url)
-    if doc is None:
-        return outcome, None, None
-    async with task_session() as db:
-        return outcome, doc, await store_extracted(db, collection_id, doc)

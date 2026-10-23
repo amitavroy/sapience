@@ -4,13 +4,25 @@ import time
 
 from app.core.celery_app import celery_app
 from app.core.logger import logger
+from app.db.session import task_session
 from app.models.document import DocumentStatus
+from app.schemas.extracted_document import ExtractedDocument
 from app.services import crawler as crawler_service
 from app.services import ingest, web_extractor
 from app.tasks import embedding as embedding_tasks
 
 RETRY_DELAYS = (3, 5, 15)  # seconds before failure retries 1, 2 and 3
 MAX_RATE_LIMIT_REQUEUES = 60  # only reached when one host is flooded with tasks
+
+
+async def _crawl_and_store(
+    url: str, collection_id: int
+) -> tuple[crawler_service.CrawlOutcome, ExtractedDocument | None, ingest.StoreResult | None]:
+    outcome, doc = await crawler_service.crawl_page(url)
+    if doc is None:
+        return outcome, None, None
+    async with task_session() as db:  # opened after the network call, not held during it
+        return outcome, doc, await ingest.store_extracted(db, collection_id, doc)
 
 
 # max_retries=None: the bound is RETRY_DELAYS, counted in `attempt` (not self.request.retries)
@@ -22,7 +34,7 @@ def crawl_url(
         started = time.monotonic()
         try:
             # SYNC-EXCEPTION: Celery task bodies are sync; asyncio.run drives the async work
-            _outcome, doc, stored = asyncio.run(ingest.crawl_and_store(url, collection_id))
+            _outcome, doc, stored = asyncio.run(_crawl_and_store(url, collection_id))
         except crawler_service.RateLimited:
             # not a failure: re-queue without using up the failure retries
             if requeues >= MAX_RATE_LIMIT_REQUEUES:

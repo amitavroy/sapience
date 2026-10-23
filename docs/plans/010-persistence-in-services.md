@@ -17,9 +17,9 @@ Each slice ends in a working, reviewable state. Pause for review after each slic
 | 4 | Embedding task | `app/services/embedding/__init__.py`: add `mark_failed(db, document_id, error)` (sets `FAILED` and the error, commits; no-op if the document is gone) | [x] |
 | 4 | Embedding task | `app/tasks/embedding.py`: `_run` opens `task_session()` and calls `run_embedding(db, ...)`; `_mark_failed` opens `task_session()` and calls `embedding_service.mark_failed(db, ...)`; drop the `Document` and `DocumentStatus` imports | [x] |
 | 4 | Embedding task | Tests: service tests for `mark_failed` on `db_session` (document found, document missing); `tests/unit/test_embedding_task.py` still passes | [x] |
-| 5 | Crawl task | `app/services/ingest.py`: remove `crawl_and_store` and its `task_session` import. `app/tasks/crawler.py`: an async helper calls `crawler_service.crawl_page`, then opens `task_session()` and calls `ingest.store_extracted(db, ...)`, returning the same `(outcome, doc, stored)` tuple | [ ] |
-| 5 | Crawl task | Tests: repoint the `ingest.crawl_and_store` patches in `tests/unit/test_crawler.py` and `test_cli_crawl.py` (if any) to the new seams | [ ] |
-| 6 | Verify | Run the grep from Verification; `make test` and `make format` clean | [ ] |
+| 5 | Crawl task | `app/services/ingest.py`: remove `crawl_and_store` and its `task_session` import. `app/tasks/crawler.py`: an async helper calls `crawler_service.crawl_page`, then opens `task_session()` and calls `ingest.store_extracted(db, ...)`, returning the same `(outcome, doc, stored)` tuple | [x] |
+| 5 | Crawl task | Tests: repoint the `ingest.crawl_and_store` patches in `tests/unit/test_crawler.py` and `test_cli_crawl.py` (if any) to the new seams | [x] |
+| 6 | Verify | Run the grep from Verification; `make test` and `make format` clean | [x] |
 
 ## Context
 
