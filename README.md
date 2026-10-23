@@ -9,7 +9,7 @@ uv sync                              # install deps (Python 3.12 is fetched by u
 uv run pre-commit install            # git hook: ruff + pytest on every commit
 cp .env.example .env                 # then adjust values
 docker compose up -d                 # Postgres (pgvector) + Redis for local dev
-uv run alembic upgrade head          # apply migrations
+make migrate                         # apply migrations + create checkpoint tables
 uv run uvicorn app.main:app --reload # serve; try GET /health
 ```
 

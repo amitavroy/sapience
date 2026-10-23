@@ -12,6 +12,7 @@ worker: ## Start the Celery worker
 
 migrate: ## Run migrations
 	uv run alembic upgrade head
+	uv run cli setup-checkpointer
 
 seed: ## Run the seeder
 	uv run cli seed-user

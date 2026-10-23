@@ -4,6 +4,7 @@ from urllib.parse import urlsplit
 
 import typer
 
+from app.agent.checkpointer import setup_checkpointer as _setup_checkpointer
 from app.core.config import settings
 from app.core.logger import logger
 from app.core.trace import trace_id
@@ -145,6 +146,13 @@ def show_chunks(document_id: int) -> None:
         typer.echo(chunk.content)
         typer.echo()
     typer.echo(f"{len(chunks)} chunks")
+
+
+@app.command()
+def setup_checkpointer() -> None:
+    """Create or upgrade the LangGraph checkpoint tables (idempotent)."""
+    asyncio.run(_setup_checkpointer())
+    typer.echo("checkpointer ready")
 
 
 if __name__ == "__main__":
