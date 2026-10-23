@@ -18,6 +18,7 @@ __all__ = [
     "EmbeddingError",
     "embedding_input",
     "get_embedder",
+    "mark_failed",
     "run_embedding",
 ]
 
@@ -49,6 +50,14 @@ def embedding_input(title: str | None, chunk: Chunk) -> str:
     if heading_path:
         lines.append(" > ".join(heading_path))
     return "\n".join(lines) + "\n\n" + chunk.content
+
+
+async def mark_failed(db: AsyncSession, document_id: int, error: str) -> None:
+    document = await db.get(Document, document_id)
+    if document is not None:
+        document.status = DocumentStatus.FAILED
+        document.error = error
+        await db.commit()
 
 
 async def run_embedding(

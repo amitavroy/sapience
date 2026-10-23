@@ -3,7 +3,7 @@ import asyncio
 from app.core.celery_app import celery_app
 from app.core.logger import logger
 from app.db.session import task_session
-from app.models.document import Document, DocumentStatus
+from app.services import embedding as embedding_service
 from app.services.embedding import EmbeddingError, get_embedder, run_embedding
 
 RETRY_DELAYS = (5, 15, 60)  # seconds before failure retries 1, 2 and 3
@@ -38,8 +38,4 @@ async def _run(document_id: int) -> None:
 
 async def _mark_failed(document_id: int, error: str) -> None:
     async with task_session() as db:
-        document = await db.get(Document, document_id)
-        if document is not None:
-            document.status = DocumentStatus.FAILED
-            document.error = error
-            await db.commit()
+        await embedding_service.mark_failed(db, document_id, error)

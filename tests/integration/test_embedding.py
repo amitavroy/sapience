@@ -7,7 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.logger import logger
 from app.db.types import EMBEDDING_DIM
 from app.models import Chunk, Collection, Document, DocumentStatus
-from app.services.embedding import EmbeddingError, EmbedResult, embedding_input, run_embedding
+from app.services.embedding import (
+    EmbeddingError,
+    EmbedResult,
+    embedding_input,
+    mark_failed,
+    run_embedding,
+)
 
 
 class FakeEmbedder:
@@ -179,3 +185,17 @@ async def test_embedding_input_has_title_and_path_and_drops_an_empty_path() -> N
 
     assert embedding_input("Title", with_path) == "Title\nA > B\n\nBody"
     assert embedding_input("Title", without_path) == "Title\n\nBody"
+
+
+async def test_mark_failed_sets_status_and_error(db_session: AsyncSession) -> None:
+    document = await make_document(db_session, chunks=1)
+
+    await mark_failed(db_session, document.id, "provider down")
+
+    await db_session.refresh(document)
+    assert document.status == DocumentStatus.FAILED
+    assert document.error == "provider down"
+
+
+async def test_mark_failed_ignores_missing_document(db_session: AsyncSession) -> None:
+    await mark_failed(db_session, 999, "provider down")  # must not raise
