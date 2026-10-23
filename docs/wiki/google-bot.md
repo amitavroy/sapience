@@ -152,7 +152,7 @@ The app can also post to a space on its own through the Chat API (`spaces.messag
 |------|--------|------|
 | Message posted | 200 | `{"name": "spaces/…/messages/…"}` |
 | No or invalid JWT | 401 | |
-| `space` not `spaces/<id>`, or `text` empty, blank or over 4000 chars | 422 | |
+| `space` not `spaces/<id>`, or `text` empty, blank or over 8000 chars | 422 | |
 | `GOOGLE_CHAT_CREDENTIALS_FILE` empty, file missing or unreadable | 503 | `Google Chat sending is not configured` |
 | Token endpoint or Chat rejects the call (e.g. 403/404), or the request fails | 502 | `Google Chat rejected the message (<status>)` (`None` when there was no response) |
 

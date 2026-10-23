@@ -9,7 +9,7 @@ Each slice ends in a working, reviewable state with passing tests. Pause for rev
 | 1 | Bot answers with memory | Deps: `langgraph`, `langchain`, `langchain-openai`, `langgraph-checkpoint-postgres`, `psycopg[binary]` | [x] |
 | 1 | Bot answers with memory | `app/core/config.py` + `.env.example`: `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_CHAT_MODEL`, `LLM_SUMMARY_MODEL`, `LLM_TIMEOUT_SECONDS` | [x] |
 | 1 | Bot answers with memory | `app/agent/models.py`: `get_model(role)` factory (cached per role) | [x] |
-| 1 | Bot answers with memory | `app/agent/state.py`, `prompts.py`, `graph.py`: `ConversationState`, system prompt, `build_graph(checkpointer)` = `agent` (`create_agent` subgraph, no tools yet) → `finalize` | [ ] |
+| 1 | Bot answers with memory | `app/agent/state.py`, `prompts.py`, `graph.py`: `ConversationState`, system prompt, `build_graph(checkpointer)` = `agent` (`create_agent` subgraph, no tools yet) → `finalize` | [x] |
 | 1 | Bot answers with memory | `app/agent/checkpointer.py`: `open_checkpointer()` (AsyncPostgresSaver from `DATABASE_URL`); `uv run cli setup-checkpointer`; `make migrate` runs it after Alembic | [ ] |
 | 1 | Bot answers with memory | `app/services/conversation.py`: `thread_id(space, user)`, `run_turn(...) -> str` | [ ] |
 | 1 | Bot answers with memory | `app/services/google_chat.py`: `_handle_mention` → DM: "I only work in spaces"; empty text: hint; else `run_turn` → `send_message`; failure → "Sorry, something went wrong" | [ ] |
@@ -58,7 +58,7 @@ Decisions settled in the design discussion:
    - The outer graph owns the flow, so future fixed steps (retrieve before the agent, guardrails, routing) become nodes here.
    - The agent loop (model ↔ tools) is LangChain v1 `create_agent`, compiled and added as the `agent` node. That is what lets `SummarizationMiddleware` work, since middleware attaches to `create_agent`, not to a hand-written graph.
    - The subgraph shares the `messages` key and inherits the parent's checkpointer.
-   - `finalize` reads the last AI message, trims it to 4000 chars (with "… (truncated)") and stores it in `state["reply"]`. Chat formatting rules live in the system prompt.
+   - `finalize` reads the last AI message, trims it to 8000 chars (with "… (truncated)") and stores it in `state["reply"]`. Chat formatting rules live in the system prompt.
 6. **State.**
 
    ```python
@@ -315,7 +315,7 @@ The checkpointer's Postgres behaviour is LangGraph's own and is not re-tested; `
 - DM fixture → "I only work in spaces" posted, model never called.
 - Mention with blank text → hint posted, model never called.
 - Model raises → apology posted, nothing else.
-- `finalize` truncates a 5000-char reply to ≤ 4000 with the suffix.
+- `finalize` truncates a 9000-char reply to ≤ 8000 with the suffix.
 - `get_model` with an empty key → `ConversationError`.
 
 **Slice 2**

@@ -77,7 +77,7 @@ async def test_requires_login(
         {"space": "spaces/", "text": "hi"},
         {"space": "spaces/AAA", "text": ""},
         {"space": "spaces/AAA", "text": "   "},
-        {"space": "spaces/AAA", "text": "x" * 4001},
+        {"space": "spaces/AAA", "text": "x" * 8001},
     ],
 )
 async def test_invalid_body_422(

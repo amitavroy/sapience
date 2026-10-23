@@ -68,7 +68,7 @@ class GoogleChatEvent(ChatModel):
 
 class SendMessageRequest(BaseModel):
     space: str = Field(pattern=r"^spaces/[A-Za-z0-9_-]+$", examples=["spaces/AAAAxxxx"])
-    text: str = Field(min_length=1, max_length=4000)
+    text: str = Field(min_length=1, max_length=8000)
 
     @field_validator("text")
     @classmethod
