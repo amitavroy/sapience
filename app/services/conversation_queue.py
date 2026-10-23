@@ -4,17 +4,26 @@ from typing import Literal
 from uuid import uuid4
 
 from coredis import PureToken, Redis
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from app.core.logger import logger
 
 LOCK_TTL = 900  # seconds; also the backstop that frees the lock after a crashed worker
 SEEN_TTL = 86400  # Celery is at-least-once and Google retries events, so remember a day
 
-# compare-and-delete: never remove a lock another worker took after ours expired
+# Every lock operation compares the token first: after our lock expires, another drain may
+# hold it, and we must neither remove it, extend it, nor pop the item it is now working on.
 _RELEASE = (
     "if redis.call('get', KEYS[1]) == ARGV[1] "
     "then return redis.call('del', KEYS[1]) else return 0 end"
+)
+_REFRESH = (
+    "if redis.call('get', KEYS[1]) == ARGV[1] "
+    "then return redis.call('expire', KEYS[1], ARGV[2]) else return 0 end"
+)
+_POP = (
+    "if redis.call('get', KEYS[1]) == ARGV[1] "
+    "then redis.call('lpop', KEYS[2]) return 1 else return 0 end"
 )
 
 
@@ -47,7 +56,16 @@ async def enqueue(redis: Redis, item: QueueItem) -> bool:
         seen_key(item.message_name), "1", condition=PureToken.NX, ex=SEEN_TTL
     ):
         return False
-    await redis.rpush(queue_key(item.space, item.user), [item.model_dump_json()])
+    try:
+        await redis.rpush(queue_key(item.space, item.user), [item.model_dump_json()])
+    except Exception:
+        # without this a retry of the same event would be dropped as a duplicate
+        if item.message_name:
+            try:
+                await redis.delete([seen_key(item.message_name)])
+            except Exception as e:
+                logger.warning(f"could not clear the dedup key: {type(e).__name__}")
+        raise
     return True
 
 
@@ -71,9 +89,23 @@ async def drain(
         try:
             # peek, process, then pop: a crashed worker leaves the item for the next drain
             while (raw := await redis.lindex(queue, 0)) is not None:
-                await redis.expire(lock, LOCK_TTL)
-                await process(QueueItem.model_validate_json(raw))
-                await redis.lpop(queue)
+                if not await redis.eval(_REFRESH, [lock], [token, LOCK_TTL]):
+                    logger.warning(f"conversation lock lost, stopping drain space={space}")
+                    break  # not return: the llen recheck below must still run
+                try:
+                    item = QueueItem.model_validate_json(raw)
+                except ValidationError as e:
+                    # e.g. a schema change between deploys; never leave it blocking the head
+                    logger.error(
+                        f"dropping unreadable queue item space={space}: {e.error_count()} errors"
+                    )
+                    await redis.eval(_POP, [lock, queue], [token])
+                    continue
+                await process(item)
+                if not await redis.eval(_POP, [lock, queue], [token]):
+                    # if nobody took the lock over, the next pass redoes this item (at-least-once)
+                    logger.warning(f"conversation lock lost mid-item, stopping space={space}")
+                    break
         finally:
             await release(redis, lock, token)
         # an item pushed between the last pop and the release would be stranded
