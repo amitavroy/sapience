@@ -4,8 +4,10 @@ import time
 
 from app.core.celery_app import celery_app
 from app.core.logger import logger
+from app.models.document import DocumentStatus
 from app.services import crawler as crawler_service
 from app.services import ingest, web_extractor
+from app.tasks import embedding as embedding_tasks
 
 RETRY_DELAYS = (3, 5, 15)  # seconds before failure retries 1, 2 and 3
 MAX_RATE_LIMIT_REQUEUES = 60  # only reached when one host is flooded with tasks
@@ -87,3 +89,11 @@ def crawl_url(
                 logger.info("duplicate of document {}", stored.document_id)
             case ingest.StoreOutcome.COLLECTION_MISSING:
                 logger.warning("collection {} not found", collection_id)
+
+        # a pending duplicate means an earlier run stored the page but may have died before
+        # enqueueing; embedding is idempotent, so enqueueing again is safe
+        if stored.outcome is ingest.StoreOutcome.STORED or (
+            stored.outcome is ingest.StoreOutcome.DUPLICATE
+            and stored.status == DocumentStatus.PENDING
+        ):
+            embedding_tasks.embed_document.delay(stored.document_id, trace_id)
