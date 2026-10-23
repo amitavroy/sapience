@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.celery_app import dispatch
 from app.core.security import hash_password, verify_password
+from app.db.session import task_session
 from app.models.user import User
 from app.schemas.user import UserCreate
 from app.tasks.user import welcome_user
@@ -11,6 +12,16 @@ from app.tasks.user import welcome_user
 
 class EmailTakenError(Exception):
     pass
+
+
+async def get(db: AsyncSession, user_id: int) -> User | None:
+    return await db.get(User, user_id)
+
+
+async def get_for_task(user_id: int) -> User | None:
+    """For Celery tasks, which have no request-scoped session."""
+    async with task_session() as db:
+        return await get(db, user_id)
 
 
 async def get_by_email(db: AsyncSession, email: str) -> User | None:

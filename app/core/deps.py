@@ -13,6 +13,7 @@ from app.core.security import decode_token
 from app.db.session import async_session_factory
 from app.models.user import User
 from app.schemas.google_chat import GoogleChatEvent
+from app.services import user as user_service
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -30,7 +31,7 @@ Creds = Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)]
 
 async def get_current_user(creds: Creds, db: DbSession) -> User:
     user_id = decode_token(creds.credentials) if creds else None
-    user = await db.get(User, user_id) if user_id is not None else None
+    user = await user_service.get(db, user_id) if user_id is not None else None
     if user is None or not user.is_active:
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED,

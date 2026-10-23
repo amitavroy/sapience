@@ -4,13 +4,13 @@
 
 ### Persistence lives in services
 
-Routes and Celery tasks do not persist data. They contain no `db.add`, `db.commit`, `db.execute` or `db.delete`, no queries, and no session or transaction handling (this includes opening a session with `task_session()`). All reads and writes of our own tables, and the transaction around them, belong in `app/services/`.
+Routes, Celery tasks, dependencies and the CLI are entry points. They do not persist data. They contain no `db.add`, `db.commit`, `db.execute`, `db.get` or `db.delete`, and no queries. All reads and writes of our own tables, and the transaction around them, belong in `app/services/`.
 
-- **Routes and tasks are thin.** They parse input, call a service, map the result to a response or a log line, and handle retries or HTTP status codes. Business rules and persistence stay out of them.
-- **A service owns its transaction.** It commits (or rolls back) and reports the outcome as a return value or a domain exception.
-- **Route services** take the request's `AsyncSession`, passed in with `Depends`. **Task-facing services** that must open their own session do so with `task_session()` inside the service, because a task has no request scope.
-- **The CLI follows the same rule:** commands may open a session (and dispose the engine), but queries and writes go through services.
-- **Reviewers:** persistence code in a route, task or CLI command is a defect; move it into a service.
+- **Entry points are thin.** They parse input, provide a session, call a service, map the result to a response or a log line, and handle retries or HTTP status codes. Business rules and persistence stay out of them.
+- **The entry point owns the session's lifetime; the service owns the transaction.** Routes get the session from `Depends(get_db)`. Tasks and CLI commands open one with `task_session()` (or `async_session_factory()` in the CLI) and dispose of it when done. They pass it to a service, which commits (or rolls back) and reports the outcome as a return value or a domain exception.
+- **One service function per operation.** Services take an `AsyncSession` as their first argument and never open one themselves, so routes, tasks and the CLI call the same function. Do not write a `_for_task` twin of a service function.
+- **Hold a session only while you need it.** A task that does slow network work (crawling, LLM calls) opens its session after that work, not before, so no database connection sits idle during it.
+- **Reviewers:** a query or write in a route, task or CLI command is a defect; move it into a service. A service that opens its own session is also a defect, unless it is a standalone helper with no caller that can provide one.
 
 ## Async first
 
