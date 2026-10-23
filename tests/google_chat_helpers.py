@@ -6,6 +6,7 @@ from pathlib import Path
 
 import httpx
 import jwt
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -53,3 +54,58 @@ class JwksServer:
             json={"keys": keys},
             headers={"cache-control": f"public, max-age={self.max_age}"},
         )
+
+
+# --- Google Chat outbound (Chat API): fake service-account key + fake token/Chat endpoints ---
+
+TOKEN_URI = "https://oauth2.example.test/token"
+SA_EMAIL = "bot@project.iam.gserviceaccount.com"
+SA_KEY_ID = "sa-key-id"
+CHAT_TOKEN = "ya29.minted-token"
+
+
+def write_service_account_file(path: Path, key: rsa.RSAPrivateKey) -> str:
+    """A service-account JSON key backed by the throwaway RSA key; returns its path."""
+    pem = key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    ).decode()
+    path.write_text(
+        json.dumps(
+            {
+                "client_email": SA_EMAIL,
+                "private_key": pem,
+                "private_key_id": SA_KEY_ID,
+                "token_uri": TOKEN_URI,
+            }
+        )
+    )
+    return str(path)
+
+
+class ChatApiServer:
+    """Fake token endpoint + Chat API. Records every request; the Chat reply is scriptable."""
+
+    def __init__(self) -> None:
+        self.requests: list[httpx.Request] = []
+        self.token_status = 200
+        self.chat_status = 200
+        self.message_name = "spaces/AAA/messages/M1"
+        self.transport = httpx.MockTransport(self._handle)
+
+    @property
+    def token_requests(self) -> list[httpx.Request]:
+        return [r for r in self.requests if str(r.url) == TOKEN_URI]
+
+    @property
+    def chat_requests(self) -> list[httpx.Request]:
+        return [r for r in self.requests if r.url.host == "chat.googleapis.com"]
+
+    def _handle(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        if str(request.url) == TOKEN_URI:
+            return httpx.Response(
+                self.token_status, json={"access_token": CHAT_TOKEN, "expires_in": 3600}
+            )
+        return httpx.Response(self.chat_status, json={"name": self.message_name})

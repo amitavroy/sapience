@@ -1,0 +1,22 @@
+meta {
+  name: Send Chat Message
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/google-chat/messages
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "space": "spaces/{{spaceId}}",
+    "text": "It works"
+  }
+}

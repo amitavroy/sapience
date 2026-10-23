@@ -1,6 +1,7 @@
 import os
 import time
 from collections.abc import AsyncIterator, Callable
+from pathlib import Path
 from types import SimpleNamespace
 
 import httpx
@@ -20,6 +21,7 @@ os.environ["CELERY_BROKER_URL"] = "redis://127.0.0.1:1/0"  # dead on purpose; ne
 from app.core.config import settings  # noqa: E402
 from app.core.deps import get_db  # noqa: E402
 from app.core.google_auth import GoogleTokenVerifier, get_google_verifier  # noqa: E402
+from app.core.google_chat_client import GoogleChatClient, get_google_chat_client  # noqa: E402
 from app.core.limiter import rate_limit  # noqa: E402
 from app.db.base import Base  # noqa: E402
 from app.main import app  # noqa: E402
@@ -27,9 +29,11 @@ from tests.google_chat_helpers import (  # noqa: E402
     GOOGLE_AUDIENCE,
     GOOGLE_EMAIL,
     GOOGLE_KID,
+    ChatApiServer,
     JwksServer,
     new_rsa_key,
     public_jwk,
+    write_service_account_file,
 )
 
 
@@ -148,3 +152,29 @@ def chat_client(
     """
     app.dependency_overrides[get_google_verifier] = lambda: google_verifier
     return client
+
+
+# --- Google Chat outbound: fake token endpoint + Chat API, real signing key in a temp file ---
+
+
+@pytest.fixture
+def chat_api() -> ChatApiServer:
+    return ChatApiServer()
+
+
+@pytest.fixture
+async def google_chat_client(
+    client: httpx.AsyncClient,
+    chat_api: ChatApiServer,
+    rsa_key: rsa.RSAPrivateKey,
+    tmp_path: Path,
+) -> AsyncIterator[GoogleChatClient]:
+    """A real GoogleChatClient on the fake transport, wired in as the endpoint's dependency.
+
+    `client` clears dependency_overrides on teardown.
+    """
+    credentials_file = write_service_account_file(tmp_path / "sa.json", rsa_key)
+    async with httpx.AsyncClient(transport=chat_api.transport) as http:
+        chat = GoogleChatClient(http, credentials_file)
+        app.dependency_overrides[get_google_chat_client] = lambda: chat
+        yield chat
