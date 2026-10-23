@@ -44,12 +44,12 @@ Every request gets a trace id that is on every log line it produces and is retur
 
 # Health check
 
-`GET /health` runs `SELECT 1` through the request's DB session.
+`GET /health` runs `SELECT 1` through the request's DB session, using the health service's `ping_db`.
 
     request → DB session → SELECT 1 → {"status": "ok", "database": "ok"}
                                └─ DB unreachable → error response (not a 200)
 
-The CLI equivalent is `uv run cli check-db`, which prints `database ok`.
+The CLI equivalent is `uv run cli check-db`, which opens its own session, calls the same `ping_db`, and prints `database ok`.
 
 # Authentication
 
