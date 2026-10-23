@@ -28,7 +28,7 @@ The `## To-do` table has rows like `| [ ] | 3 | Add \`Category\` model |`. Find 
 Implement exactly the scope of that single row — no more. Follow the codebase's own conventions:
 
 - Follow CLAUDE.md and the `.ai/rules` index for any files you touch (read the matching rule files before writing code, per the standing project instructions).
-- Use the plan's own "New/changed files" code samples as the intended shape, but reconcile them with what already exists in the repo (e.g. an `artisan make:*` stub, sibling files' actual conventions) rather than blindly overwriting.
+- Use the plan's own "New/changed files" code samples as the intended shape, but reconcile them with what already exists in the repo (e.g. a generated stub, sibling files' actual conventions) rather than blindly overwriting.
 - If the task is a test-writing/running step, follow `testing-best-practices` and actually run the tests.
 - If the task is a formatting/verification step already covered by earlier tasks' work, just run it.
 
@@ -40,6 +40,6 @@ Edit the plan file: flip that row's `[ ]` to `[x]`.
 
 ## Step 5 — Format and report
 
-Run `vendor/bin/pint --dirty --format agent` if any PHP files changed. Run any narrowly-scoped tests the task calls for.
+Run `uv run ruff format . && uv run ruff check .` if any Python files changed. Run any narrowly-scoped tests the task calls for.
 
 Then stop. Report: which task you did, the files you changed, and any tests you ran (pass/fail). Wait for the user to review and explicitly approve. Do not ask about committing in the same turn as reporting completion — only bring up committing after the user has confirmed the work looks good, and never commit without the user's explicit go-ahead for that specific commit.
