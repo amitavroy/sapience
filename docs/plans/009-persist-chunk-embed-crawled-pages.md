@@ -23,7 +23,7 @@ Each slice ends in a working, reviewable state. Pause for review after each slic
 | 3 | Overlap and oversized blocks | Tests: overlap present inside a split section and absent across sections; every chunk ≤ `max_tokens`; table header repeated; code split on lines | [x] |
 | 4 | Embed | Add `openai` (`uv add openai`; the SDK is used for OpenRouter too); settings `embedding_provider`, `embedding_base_url`, `embedding_api_key`, `embedding_model`, `embedding_batch_size`, `embedding_timeout_seconds` in `config.py` and `.env.example` | [x] |
 | 4 | Embed | `app/services/embedding/`: `Embedder` protocol, `EmbedResult` (vectors, tokens, cost), `EmbeddingError(retryable)`, `OpenAICompatibleEmbedder` (OpenRouter by default), `get_embedder()`; `embedding_input(title, chunk)` | [x] |
-| 4 | Embed | `app/tasks/embedding.py`: `embed_document` task (status transitions, batches, commit per batch, retries 5 s / 15 s / 60 s, `failed` with `error`); register it in `celery_app.include` | [ ] |
+| 4 | Embed | `app/tasks/embedding.py`: `embed_document` task (status transitions, batches, commit per batch, retries 5 s / 15 s / 60 s, `failed` with `error`); register it in `celery_app.include` | [x] |
 | 4 | Embed | Crawl task enqueues `embed_document` after a store, and re-enqueues it for a `pending` duplicate | [ ] |
 | 4 | Embed | Tests with a fake embedder: fills embeddings, `ready`, batching, resume, retryable vs permanent, already `ready` is a no-op | [ ] |
 | 5 | Tune on real pages | Crawl 3–5 real sites, review `show-chunks` output together, adjust sizes and rules, bump `WebChunker.version` if the logic changes | [ ] |
