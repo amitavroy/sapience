@@ -3,7 +3,6 @@ from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
 from app.agent import graph as graph_module
-from app.agent import models
 from app.agent.graph import MAX_REPLY_CHARS, TRUNCATED_SUFFIX, build_graph, finalize
 from app.agent.models import ConversationError, get_model
 from app.agent.state import ConversationContext
@@ -91,7 +90,17 @@ def test_get_model_without_key_or_model_raises(
 ) -> None:
     monkeypatch.setattr(settings, "llm_api_key", key)
     monkeypatch.setattr(settings, "llm_chat_model", chat_model)
-    models.get_model.cache_clear()
 
     with pytest.raises(ConversationError):
         get_model("chat")
+
+
+def test_each_model_gets_its_own_http_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    # a shared client stays bound to the first task's event loop ("Event loop is closed")
+    monkeypatch.setattr(settings, "llm_api_key", "k")
+    monkeypatch.setattr(settings, "llm_chat_model", "m")
+
+    first, second = get_model("chat"), get_model("chat")
+
+    assert first is not second
+    assert first.root_async_client._client is not second.root_async_client._client

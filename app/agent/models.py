@@ -1,6 +1,6 @@
-from functools import cache
 from typing import Literal
 
+import httpx
 from langchain_core.language_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 
@@ -13,7 +13,6 @@ class ConversationError(Exception):
     pass
 
 
-@cache
 def get_model(role: Role) -> BaseChatModel:
     model = settings.llm_summary_model if role == "summary" else ""
     model = model or settings.llm_chat_model
@@ -23,6 +22,9 @@ def get_model(role: Role) -> BaseChatModel:
         model=model,
         api_key=settings.llm_api_key,
         base_url=settings.llm_base_url,
-        timeout=settings.llm_timeout_seconds,
+        # An httpx.Timeout is unhashable, so langchain_openai builds a client for this model
+        # instead of reusing its process-wide cached one. That cached client is bound to the
+        # event loop that first used it, and every Celery task runs in its own loop.
+        timeout=httpx.Timeout(settings.llm_timeout_seconds),
         max_retries=0,  # the drain owns retries
     )

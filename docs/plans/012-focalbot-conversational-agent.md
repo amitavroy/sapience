@@ -8,7 +8,7 @@ Each slice ends in a working, reviewable state with passing tests. Pause for rev
 |---|-------|------|------|
 | 1 | Bot answers with memory | Deps: `langgraph`, `langchain`, `langchain-openai`, `langgraph-checkpoint-postgres`, `psycopg[binary]` | [x] |
 | 1 | Bot answers with memory | `app/core/config.py` + `.env.example`: `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_CHAT_MODEL`, `LLM_SUMMARY_MODEL`, `LLM_TIMEOUT_SECONDS` | [x] |
-| 1 | Bot answers with memory | `app/agent/models.py`: `get_model(role)` factory (cached per role) | [x] |
+| 1 | Bot answers with memory | `app/agent/models.py`: `get_model(role)` factory (not cached; see Decision 7) | [x] |
 | 1 | Bot answers with memory | `app/agent/state.py`, `prompts.py`, `graph.py`: `ConversationState`, system prompt, `build_graph(checkpointer)` = `agent` (`create_agent` subgraph, no tools yet) → `finalize` | [x] |
 | 1 | Bot answers with memory | `app/agent/checkpointer.py`: `open_checkpointer()` (AsyncPostgresSaver from `DATABASE_URL`); `uv run cli setup-checkpointer`; `make migrate` runs it after Alembic | [x] |
 | 1 | Bot answers with memory | `app/services/conversation.py`: `thread_id(space, user)`, `run_turn(...) -> str` | [x] |
@@ -68,7 +68,7 @@ Decisions settled in the design discussion:
    ```
 
    Per-turn facts that the LLM must not control (space, user id, display name) travel as **runtime context** (`context=ConversationContext(...)`), not as state the model can write. Tools read the space from there.
-7. **Model factory by role.** `get_model(role: Literal["chat", "summary"]) -> BaseChatModel` builds `ChatOpenAI(model=…, api_key=LLM_API_KEY, base_url=LLM_BASE_URL, timeout=LLM_TIMEOUT_SECONDS, max_retries=0)`, cached per role (`functools.cache`).
+7. **Model factory by role.** `get_model(role: Literal["chat", "summary"]) -> BaseChatModel` builds `ChatOpenAI(model=…, api_key=LLM_API_KEY, base_url=LLM_BASE_URL, timeout=LLM_TIMEOUT_SECONDS, max_retries=0)`, built per call, not cached: each Celery task runs in its own event loop, and a cached model (or langchain_openai's cached httpx client) stays bound to the first loop and fails with "Event loop is closed".
    - Graph code asks for a role and never names a model, so swapping a model is an env change, and tests patch one function.
    - `LLM_BASE_URL` defaults to `https://openrouter.ai/api/v1`. `LLM_SUMMARY_MODEL` empty means "same as chat".
    - The key is separate from `EMBEDDING_API_KEY` (it can be the same value) so the two can be rotated or billed apart.
@@ -129,7 +129,6 @@ Decisions settled in the design discussion:
 Role = Literal["chat", "summary"]
 
 
-@cache
 def get_model(role: Role) -> BaseChatModel:
     model = settings.llm_summary_model if role == "summary" else ""
     model = model or settings.llm_chat_model
