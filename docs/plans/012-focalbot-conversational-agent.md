@@ -7,7 +7,7 @@ Each slice ends in a working, reviewable state with passing tests. Pause for rev
 | # | Slice | Step | Done |
 |---|-------|------|------|
 | 1 | Bot answers with memory | Deps: `langgraph`, `langchain`, `langchain-openai`, `langgraph-checkpoint-postgres`, `psycopg[binary]` | [x] |
-| 1 | Bot answers with memory | `app/core/config.py` + `.env.example`: `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_CHAT_MODEL`, `LLM_SUMMARY_MODEL`, `LLM_TIMEOUT_SECONDS` | [ ] |
+| 1 | Bot answers with memory | `app/core/config.py` + `.env.example`: `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_CHAT_MODEL`, `LLM_SUMMARY_MODEL`, `LLM_TIMEOUT_SECONDS` | [x] |
 | 1 | Bot answers with memory | `app/agent/models.py`: `get_model(role)` factory (cached per role) | [ ] |
 | 1 | Bot answers with memory | `app/agent/state.py`, `prompts.py`, `graph.py`: `ConversationState`, system prompt, `build_graph(checkpointer)` = `agent` (`create_agent` subgraph, no tools yet) → `finalize` | [ ] |
 | 1 | Bot answers with memory | `app/agent/checkpointer.py`: `open_checkpointer()` (AsyncPostgresSaver from `DATABASE_URL`); `uv run cli setup-checkpointer`; `make migrate` runs it after Alembic | [ ] |

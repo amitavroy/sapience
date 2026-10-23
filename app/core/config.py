@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     embedding_model: str = "openai/text-embedding-3-small"
     embedding_batch_size: int = 100  # chunks per API call
     embedding_timeout_seconds: float = 30  # per API call
+    # conversational agent: an OpenAI-compatible chat API, OpenRouter by default
+    llm_base_url: str = "https://openrouter.ai/api/v1"
+    llm_api_key: str = ""  # empty = every turn fails with a clear error
+    llm_chat_model: str = ""  # provider-specific model id for replies; empty = turns fail
+    llm_summary_model: str = ""  # empty = same as llm_chat_model
+    llm_timeout_seconds: float = 60  # per LLM call
     # dev-only defaults for `cli seed-user`
     seed_user_name: str = "Admin"
     seed_user_email: str = "admin@example.com"
