@@ -7,6 +7,7 @@ from fastapi import Depends, FastAPI
 from app.core import limiter
 from app.core.config import settings
 from app.core.google_auth import GoogleTokenVerifier
+from app.core.google_chat_client import GoogleChatClient
 from app.core.limiter import rate_limit
 from app.core.logger import logger
 from app.db.session import engine
@@ -19,6 +20,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info(f"starting {settings.app_name}")
     async with limiter.redis, httpx.AsyncClient(timeout=10) as http:
         app.state.google_verifier = GoogleTokenVerifier(http)
+        app.state.google_chat_client = GoogleChatClient(http, settings.google_chat_credentials_file)
         yield
     await engine.dispose()
     logger.info("shutdown complete")

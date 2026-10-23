@@ -6,10 +6,10 @@ Each slice ends in a working, reviewable state with passing tests. Pause for rev
 
 | # | Slice | Step | Done |
 |---|-------|------|------|
-| 1 | Post a message end-to-end | GCP: create a service account in the Chat app's project, download its JSON key into git-ignored `secrets/` (see Setup) | [ ] |
-| 1 | Post a message end-to-end | `app/core/config.py` + `.env.example`: `GOOGLE_CHAT_CREDENTIALS_FILE` (empty default); `.gitignore`: `secrets/` | [ ] |
-| 1 | Post a message end-to-end | `app/core/google_chat_client.py`: `ServiceAccountCredentials.from_file`, `GoogleChatClient` with token minting (JWT-bearer grant) and `create_message(space, text) -> str` | [ ] |
-| 1 | Post a message end-to-end | `app/main.py` lifespan: `app.state.google_chat_client` on the shared httpx client; `get_google_chat_client` dependency | [ ] |
+| 1 | Post a message end-to-end | GCP: create a service account in the Chat app's project, download its JSON key into git-ignored `secrets/` (see Setup) | [x] |
+| 1 | Post a message end-to-end | `app/core/config.py` + `.env.example`: `GOOGLE_CHAT_CREDENTIALS_FILE` (empty default); `.gitignore`: `secrets/` | [x] |
+| 1 | Post a message end-to-end | `app/core/google_chat_client.py`: `ServiceAccountCredentials.from_file`, `GoogleChatClient` with token minting (JWT-bearer grant) and `create_message(space, text) -> str` | [x] |
+| 1 | Post a message end-to-end | `app/main.py` lifespan: `app.state.google_chat_client` on the shared httpx client; `get_google_chat_client` dependency | [x] |
 | 1 | Post a message end-to-end | `app/schemas/google_chat.py`: `SendMessageRequest`, `SendMessageResponse`; `app/services/google_chat.py`: `send_message` | [ ] |
 | 1 | Post a message end-to-end | `app/routers/google_chat.py`: `POST /google-chat/messages` behind `CurrentUser`; register in `main.py` | [ ] |
 | 1 | Post a message end-to-end | `docs/bruno/send-chat-message.bru` | [ ] |

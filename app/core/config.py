@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     # Google Chat add-on webhook; empty = endpoint rejects everything
     google_chat_audience: str = ""  # exact HTTP endpoint URL set in the Chat API console
     google_chat_service_account_email: str = ""  # service-<project-number>@gcp-sa-gsuiteaddons...
+    # our own service account JSON key, for posting via the Chat API; empty = sending disabled
+    google_chat_credentials_file: str = ""
     # web page crawler
     crawler_user_agent: str = (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
