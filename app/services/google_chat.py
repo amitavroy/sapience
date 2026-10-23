@@ -1,3 +1,4 @@
+from app.core.google_chat_client import GoogleChatClient
 from app.core.logger import logger
 from app.schemas.google_chat import AppCommandPayload, ChatPayload, MessagePayload
 
@@ -11,6 +12,12 @@ def reply(text: str) -> dict:
             "chatDataAction": {"createMessageAction": {"message": {"text": text}}}
         }
     }
+
+
+async def send_message(client: GoogleChatClient, space: str, text: str) -> str:
+    name = await client.create_message(space, text)
+    logger.info(f"google chat sent space={space} message={name}")
+    return name
 
 
 async def handle_event(chat: ChatPayload) -> None:

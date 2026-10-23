@@ -12,7 +12,7 @@ from app.core.limiter import rate_limit
 from app.core.logger import logger
 from app.db.session import engine
 from app.middleware.request_log import log_requests
-from app.routers import auth, health, ingest, user
+from app.routers import auth, google_chat, health, ingest, user
 
 
 @asynccontextmanager
@@ -38,3 +38,4 @@ app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(user.router)
 app.include_router(ingest.router)
+app.include_router(google_chat.router)

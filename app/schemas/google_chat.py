@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 
 
@@ -64,3 +64,19 @@ class ChatPayload(ChatModel):
 class GoogleChatEvent(ChatModel):
     authorization_event_object: AuthorizationEventObject
     chat: ChatPayload | None = None
+
+
+class SendMessageRequest(BaseModel):
+    space: str = Field(pattern=r"^spaces/[A-Za-z0-9_-]+$", examples=["spaces/AAAAxxxx"])
+    text: str = Field(min_length=1, max_length=4000)
+
+    @field_validator("text")
+    @classmethod
+    def not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("text is blank")
+        return v
+
+
+class SendMessageResponse(BaseModel):
+    name: str

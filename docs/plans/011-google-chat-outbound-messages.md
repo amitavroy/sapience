@@ -10,8 +10,8 @@ Each slice ends in a working, reviewable state with passing tests. Pause for rev
 | 1 | Post a message end-to-end | `app/core/config.py` + `.env.example`: `GOOGLE_CHAT_CREDENTIALS_FILE` (empty default); `.gitignore`: `secrets/` | [x] |
 | 1 | Post a message end-to-end | `app/core/google_chat_client.py`: `ServiceAccountCredentials.from_file`, `GoogleChatClient` with token minting (JWT-bearer grant) and `create_message(space, text) -> str` | [x] |
 | 1 | Post a message end-to-end | `app/main.py` lifespan: `app.state.google_chat_client` on the shared httpx client; `get_google_chat_client` dependency | [x] |
-| 1 | Post a message end-to-end | `app/schemas/google_chat.py`: `SendMessageRequest`, `SendMessageResponse`; `app/services/google_chat.py`: `send_message` | [ ] |
-| 1 | Post a message end-to-end | `app/routers/google_chat.py`: `POST /google-chat/messages` behind `CurrentUser`; register in `main.py` | [ ] |
+| 1 | Post a message end-to-end | `app/schemas/google_chat.py`: `SendMessageRequest`, `SendMessageResponse`; `app/services/google_chat.py`: `send_message` | [x] |
+| 1 | Post a message end-to-end | `app/routers/google_chat.py`: `POST /google-chat/messages` behind `CurrentUser`; register in `main.py` | [x] |
 | 1 | Post a message end-to-end | `docs/bruno/send-chat-message.bru` | [ ] |
 | 1 | Post a message end-to-end | Tests: happy path through the endpoint with `MockTransport` (token call + create call, correct URL, body, bearer); 401 without a JWT; 422 for a bad `space` / empty or too-long `text` | [ ] |
 | 1 | Post a message end-to-end | Manual: post via Bruno to a space the app is in; message appears in the space as the app | [ ] |
