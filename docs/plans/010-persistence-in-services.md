@@ -8,9 +8,9 @@ Each slice ends in a working, reviewable state. Pause for review after each slic
 |---|-------|------|------|
 | 1 | User lookup | `app/services/user.py`: add `get(db, user_id)`; `get_current_user` in `app/core/deps.py` calls it instead of `db.get(User, ...)` | [x] |
 | 1 | User lookup | Tests: `user_service.get` returns the user / `None`; `test_current_user.py` still passes | [x] |
-| 2 | Welcome task | `app/services/user.py`: remove `get_for_task` and its `task_session` import (added earlier, superseded by decision 2) | [ ] |
-| 2 | Welcome task | `app/tasks/user.py`: drop `_welcome_user(db, ...)`, `AsyncSession` and `User` imports; an async helper opens `task_session()` and calls `user_service.get(db, user_id)`; the task runs it with `asyncio.run` and keeps the log lines. Import `user_service` inside the helper, because `app/services/user.py` imports this module | [ ] |
-| 2 | Welcome task | Tests: rewrite the two welcome tests in `tests/integration/test_jobs.py` against the task, with `app.tasks.user.task_session` patched to yield `db_session` | [ ] |
+| 2 | Welcome task | `app/services/user.py`: remove `get_for_task` and its `task_session` import (added earlier, superseded by decision 2) | [x] |
+| 2 | Welcome task | `app/tasks/user.py`: drop `_welcome_user(db, ...)`, `AsyncSession` and `User` imports; an async helper opens `task_session()` and calls `user_service.get(db, user_id)`; the task runs it with `asyncio.run` and keeps the log lines. Import `user_service` inside the helper, because `app/services/user.py` imports this module | [x] |
+| 2 | Welcome task | Tests: rewrite the two welcome tests in `tests/integration/test_jobs.py` against the task, with `app.tasks.user.task_session` patched to yield `db_session` | [x] |
 | 3 | Health check | `app/services/health.py` (new): `ping_db(db)`; `app/routers/health.py` calls it | [ ] |
 | 3 | Health check | CLI `_ping_db` opens `async_session_factory()` like the other commands and calls `health.ping_db(db)` (the CLI keeps `engine.dispose()`); remove the `sqlalchemy.text` imports from the route and the CLI | [ ] |
 | 3 | Health check | Tests: `health.ping_db` on the `db_session` fixture; `test_check_db` patches `health.ping_db` and the session factory so it needs no database | [ ] |
