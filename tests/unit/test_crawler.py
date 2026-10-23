@@ -355,3 +355,54 @@ def test_missing_collection_logs_a_warning_without_raising(
     crawler_tasks.crawl_url("https://a.test/p", "t", 99)
 
     assert warnings(logs) == ["collection 99 not found"]
+
+
+@pytest.fixture
+def embeds(monkeypatch: pytest.MonkeyPatch) -> list[tuple]:
+    calls: list[tuple] = []
+    monkeypatch.setattr(
+        crawler_tasks.embedding_tasks.embed_document,
+        "delay",
+        lambda *args: calls.append(args),
+    )
+    return calls
+
+
+def test_stored_page_enqueues_embedding_once(
+    embeds: list[tuple], serve, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    serve(httpx.Response(200, content=b"<p>hi</p>", headers=HTML))
+    stub_store(monkeypatch, ingest.StoreResult(ingest.StoreOutcome.STORED, 7))
+
+    crawler_tasks.crawl_url("https://a.test/p", "t", 1)
+
+    assert embeds == [(7, "t")]
+
+
+def test_pending_duplicate_enqueues_embedding_again(
+    embeds: list[tuple], serve, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    serve(httpx.Response(200, content=b"<p>hi</p>", headers=HTML))
+    stub_store(monkeypatch, ingest.StoreResult(ingest.StoreOutcome.DUPLICATE, 3, "pending"))
+
+    crawler_tasks.crawl_url("https://a.test/p", "t", 1)
+
+    assert embeds == [(3, "t")]
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        ingest.StoreResult(ingest.StoreOutcome.DUPLICATE, 3, "ready"),
+        ingest.StoreResult(ingest.StoreOutcome.COLLECTION_MISSING),
+    ],
+)
+def test_ready_duplicate_and_missing_collection_do_not_enqueue(
+    embeds: list[tuple], serve, monkeypatch: pytest.MonkeyPatch, result: ingest.StoreResult
+) -> None:
+    serve(httpx.Response(200, content=b"<p>hi</p>", headers=HTML))
+    stub_store(monkeypatch, result)
+
+    crawler_tasks.crawl_url("https://a.test/p", "t", 1)
+
+    assert embeds == []

@@ -20,8 +20,9 @@ from app.db.types import EMBEDDING_DIM, JSONType
 if TYPE_CHECKING:
     from app.models.document import Document
 
-# pgvector on Postgres; SQLite (tests) has no vector type, so store the floats as JSON there
-EmbeddingType = Vector(EMBEDDING_DIM).with_variant(JSON(), "sqlite")
+# pgvector on Postgres; SQLite (tests) has no vector type, so store the floats as JSON there.
+# none_as_null: an unset embedding must be SQL NULL, or `embedding IS NULL` misses it on SQLite
+EmbeddingType = Vector(EMBEDDING_DIM).with_variant(JSON(none_as_null=True), "sqlite")
 
 
 class Chunk(Base):
