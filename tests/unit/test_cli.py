@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 from typer.testing import CliRunner
 
@@ -14,13 +14,6 @@ from app.models.document import Document
 from app.services import user as user_service
 
 ARGS = ["seed-user", "--email", "Seed@Example.com", "--password", "seedpass123"]
-
-
-def test_check_db() -> None:
-    result = CliRunner().invoke(cli.app, ["check-db"])
-
-    assert result.exit_code == 0
-    assert "database ok" in result.output
 
 
 @pytest.fixture
@@ -36,6 +29,21 @@ def factory(monkeypatch: pytest.MonkeyPatch) -> async_sessionmaker:
     monkeypatch.setattr(cli, "async_session_factory", factory)
     monkeypatch.setattr(cli.settings, "debug", True)
     return factory
+
+
+def test_check_db(factory: async_sessionmaker, monkeypatch: pytest.MonkeyPatch) -> None:
+    pinged: list[AsyncSession] = []
+
+    async def ping_db(db: AsyncSession) -> None:
+        pinged.append(db)
+
+    monkeypatch.setattr(cli.health_service, "ping_db", ping_db)
+
+    result = CliRunner().invoke(cli.app, ["check-db"])
+
+    assert result.exit_code == 0
+    assert "database ok" in result.output
+    assert len(pinged) == 1
 
 
 def test_seed_user_creates_then_is_idempotent(factory: async_sessionmaker) -> None:

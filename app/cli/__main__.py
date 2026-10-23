@@ -3,7 +3,6 @@ import uuid
 from urllib.parse import urlsplit
 
 import typer
-from sqlalchemy import text
 
 from app.core.config import settings
 from app.core.logger import logger
@@ -13,6 +12,7 @@ from app.models.chunk import Chunk
 from app.schemas.user import UserCreate
 from app.services import collection as collection_service
 from app.services import document as document_service
+from app.services import health as health_service
 from app.services import user as user_service
 from app.tasks import crawler as crawler_tasks
 
@@ -29,9 +29,11 @@ def main() -> None:
 
 
 async def _ping_db() -> None:
-    async with engine.connect() as conn:
-        await conn.execute(text("SELECT 1"))
-    await engine.dispose()
+    async with async_session_factory() as db:
+        try:
+            await health_service.ping_db(db)
+        finally:
+            await engine.dispose()
 
 
 @app.command()

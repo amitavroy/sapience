@@ -11,9 +11,9 @@ Each slice ends in a working, reviewable state. Pause for review after each slic
 | 2 | Welcome task | `app/services/user.py`: remove `get_for_task` and its `task_session` import (added earlier, superseded by decision 2) | [x] |
 | 2 | Welcome task | `app/tasks/user.py`: drop `_welcome_user(db, ...)`, `AsyncSession` and `User` imports; an async helper opens `task_session()` and calls `user_service.get(db, user_id)`; the task runs it with `asyncio.run` and keeps the log lines. Import `user_service` inside the helper, because `app/services/user.py` imports this module | [x] |
 | 2 | Welcome task | Tests: rewrite the two welcome tests in `tests/integration/test_jobs.py` against the task, with `app.tasks.user.task_session` patched to yield `db_session` | [x] |
-| 3 | Health check | `app/services/health.py` (new): `ping_db(db)`; `app/routers/health.py` calls it | [ ] |
-| 3 | Health check | CLI `_ping_db` opens `async_session_factory()` like the other commands and calls `health.ping_db(db)` (the CLI keeps `engine.dispose()`); remove the `sqlalchemy.text` imports from the route and the CLI | [ ] |
-| 3 | Health check | Tests: `health.ping_db` on the `db_session` fixture; `test_check_db` patches `health.ping_db` and the session factory so it needs no database | [ ] |
+| 3 | Health check | `app/services/health.py` (new): `ping_db(db)`; `app/routers/health.py` calls it | [x] |
+| 3 | Health check | CLI `_ping_db` opens `async_session_factory()` like the other commands and calls `health.ping_db(db)` (the CLI keeps `engine.dispose()`); remove the `sqlalchemy.text` imports from the route and the CLI | [x] |
+| 3 | Health check | Tests: `health.ping_db` on the `db_session` fixture; `test_check_db` patches `health.ping_db` and the session factory so it needs no database | [x] |
 | 4 | Embedding task | `app/services/embedding/__init__.py`: add `mark_failed(db, document_id, error)` (sets `FAILED` and the error, commits; no-op if the document is gone) | [ ] |
 | 4 | Embedding task | `app/tasks/embedding.py`: `_run` opens `task_session()` and calls `run_embedding(db, ...)`; `_mark_failed` opens `task_session()` and calls `embedding_service.mark_failed(db, ...)`; drop the `Document` and `DocumentStatus` imports | [ ] |
 | 4 | Embedding task | Tests: service tests for `mark_failed` on `db_session` (document found, document missing); `tests/unit/test_embedding_task.py` still passes | [ ] |
