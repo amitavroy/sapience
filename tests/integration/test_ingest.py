@@ -149,7 +149,7 @@ async def test_stores_chunks_with_contiguous_index_and_no_embedding(
     assert [c.meta["heading_path"] for c in chunks] == [["One"], ["Two"], ["Three"]]
     assert chunks[0].meta["blocks"] == [0, 2]
     assert chunks[0].meta["chunker"] == "web"
-    assert chunks[0].meta["chunker_version"] == 1
+    assert chunks[0].meta["chunker_version"] == 2
 
 
 async def test_document_meta_records_the_chunker(db_session: AsyncSession) -> None:
@@ -159,7 +159,7 @@ async def test_document_meta_records_the_chunker(db_session: AsyncSession) -> No
 
     document = await db_session.get(Document, result.document_id)
     assert document.meta["chunker"] == "web"
-    assert document.meta["chunker_version"] == 1
+    assert document.meta["chunker_version"] == 2
 
 
 async def test_a_duplicate_stores_no_extra_chunks(db_session: AsyncSession) -> None:

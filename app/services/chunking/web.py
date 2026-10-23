@@ -68,7 +68,7 @@ class WebChunker:
     """
 
     name: str = "web"
-    version: int = 1
+    version: int = 2
     target_tokens: int = 400
     max_tokens: int = 800
     min_tokens: int = 100
@@ -86,7 +86,14 @@ class WebChunker:
 
         for unit in self._units(doc):
             if unit.tokens > self.target_tokens:
-                flush()
+                if current and sum(u.tokens for u in current) < self.min_tokens:
+                    # a tiny chunk (nav, byline) reads badly alone: it leads the split section
+                    unit = _Unit(
+                        unit.heading_path, [p for u in current for p in u.pieces] + unit.pieces
+                    )
+                    current.clear()
+                else:
+                    flush()
                 drafts.extend(self._split(unit))
             elif current and self._fits(current, unit):
                 current.append(unit)
@@ -186,10 +193,12 @@ class WebChunker:
 
     def _fits(self, current: list[_Unit], unit: _Unit) -> bool:
         size = sum(u.tokens for u in current)
-        if size + unit.tokens > self.target_tokens:
+        tiny = size < self.min_tokens
+        # a tiny chunk may grow up to the cap rather than stay alone
+        if size + unit.tokens > (self.max_tokens if tiny else self.target_tokens):
             return False
         same_branch = _branch(current[-1].heading_path) == _branch(unit.heading_path)
-        return same_branch or size < self.min_tokens
+        return same_branch or tiny
 
     def _merged(self, units: list[_Unit]) -> ChunkDraft:
         heading_path = list(units[0].heading_path)
@@ -209,10 +218,13 @@ class WebChunker:
         for piece in unit.pieces:
             group = groups[-1]
             over = size + piece.tokens > self.target_tokens
-            # a heading stays with the block after it, as long as the cap allows
-            lone_heading = len(group) == 1 and group[0].heading
-            if lone_heading and size + piece.tokens <= self.max_tokens:
-                over = False
+            # a heading stays with the block after it, and a piece under `min_tokens` takes the
+            # next block instead of being cut off (and then repeated as overlap), as long as
+            # the cap allows
+            own = sum(p.tokens for p in group)
+            if (group and group[-1].heading) or own < self.min_tokens:
+                if size + piece.tokens <= self.max_tokens:
+                    over = False
             if group and over:
                 tail = self._overlap_tail(group)
                 groups.append([])

@@ -26,7 +26,7 @@ Each slice ends in a working, reviewable state. Pause for review after each slic
 | 4 | Embed | `app/tasks/embedding.py`: `embed_document` task (status transitions, batches, commit per batch, retries 5 s / 15 s / 60 s, `failed` with `error`); register it in `celery_app.include` | [x] |
 | 4 | Embed | Crawl task enqueues `embed_document` after a store, and re-enqueues it for a `pending` duplicate | [x] |
 | 4 | Embed | Tests with a fake embedder: fills embeddings, `ready`, batching, resume, retryable vs permanent, already `ready` is a no-op | [x] |
-| 5 | Tune on real pages | Crawl 3–5 real sites, review `show-chunks` output together, adjust sizes and rules, bump `WebChunker.version` if the logic changes | [ ] |
+| 5 | Tune on real pages | Crawl 3–5 real sites, review `show-chunks` output together, adjust sizes and rules, bump `WebChunker.version` if the logic changes | [x] |
 | 6 | Docs | Wiki entry `docs/wiki/ingestion.md` (pipeline, statuses, chunking rules, settings, limits); update `docs/wiki/web-crawl.md` and `docs/wiki/index.md` | [ ] |
 
 ## Context

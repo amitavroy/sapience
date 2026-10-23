@@ -190,7 +190,7 @@ def test_html_mime_types_use_the_web_chunker(mime_type: str) -> None:
     found = chunker_for(mime_type)
 
     assert isinstance(found, WebChunker)
-    assert (found.name, found.version) == ("web", 1)
+    assert (found.name, found.version) == ("web", 2)
 
 
 def test_a_mime_type_without_a_strategy_raises() -> None:
@@ -347,3 +347,42 @@ def test_sentence_splitter_keeps_punctuation_and_ignores_decimals() -> None:
     ]
     assert split_sentences("one. two") == ["one. two"]  # lowercase after the period: no split
     assert split_sentences("") == []
+
+
+def test_a_tiny_leading_chunk_leads_the_next_large_section() -> None:
+    # nav text before the title is under min_tokens and the section after it is over target
+    doc = make_doc(
+        ([], [Block(type="paragraph", text="Home / Security")]),
+        (["Title"], [heading("Title"), para(28), para(28)]),
+    )
+
+    chunks = chunker().chunk(doc)
+
+    assert chunks[0].content.startswith("Home / Security\n\n# Title")
+    assert chunks[0].heading_path == ["Title"]
+    assert chunks[0].block_start == 0
+    assert all(c.token_count > 3 for c in chunks)
+
+
+def test_a_tiny_chunk_grows_to_the_cap_instead_of_standing_alone() -> None:
+    doc = make_doc(
+        (["A"], [heading("A"), para(3)]),
+        (["B"], [heading("B"), para(29)]),
+    )
+
+    chunks = chunker().chunk(doc)
+
+    assert len(chunks) == 1  # 4 + 30 words is over target (30) but under max (60)
+
+
+def test_a_small_first_piece_takes_the_next_block_rather_than_being_repeated() -> None:
+    doc = make_doc(
+        (["T"], [heading("T"), para(5, "first"), para(28), para(28)]),
+    )
+
+    chunks = chunker(overlap_tokens=10).chunk(doc)
+
+    first_block = words(5, "first")
+    assert chunks[0].content.count(first_block) == 1
+    assert sum(c.content.count(first_block) for c in chunks) == 1  # not copied as overlap
+    assert all(c.token_count <= 60 for c in chunks)
