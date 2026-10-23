@@ -22,7 +22,7 @@ The goal is to never block the event loop. The event loop is one worker serving 
 
 1. **Handlers and dependencies are `async def`.** Route handlers, `Depends` callables, middleware and lifespan hooks are all async.
 2. **Database access is async.** SQLAlchemy `AsyncEngine` / `AsyncSession` with an async driver (`asyncpg` for Postgres, `aiosqlite` in tests). Alembic runs through an async `env.py`.
-3. **Network and I/O use async clients.** Redis uses `redis.asyncio`; outbound HTTP uses `httpx.AsyncClient`. Blocking clients (e.g. `requests`) must never be called from `async def` code.
+3. **Network and I/O use async clients.** Redis uses `coredis`; outbound HTTP uses `httpx.AsyncClient`. Blocking clients (e.g. `requests`) must never be called from `async def` code.
 4. **Tests are async.** `pytest-asyncio` (`asyncio_mode = "auto"`) with `httpx.AsyncClient` on `ASGITransport`.
 5. **Never block the event loop.** No blocking calls (`time.sleep`, sync file or network I/O) and no CPU-heavy work inside `async def`.
 
