@@ -16,8 +16,8 @@ Each slice ends in a working, reviewable state with passing tests. Pause for rev
 | 1 | Post a message end-to-end | Tests: happy path through the endpoint with `MockTransport` (token call + create call, correct URL, body, bearer); 401 without a JWT; 422 for a bad `space` / empty or too-long `text` | [x] |
 | 1 | Post a message end-to-end | Manual: post via Bruno to a space the app is in; message appears in the space as the app | [x] |
 | 2 | Token reuse and failures | Token cached until 60 s before expiry, one mint under concurrent calls (`asyncio.Lock`); a 401 from Chat drops the token and retries once | [x] |
-| 2 | Token reuse and failures | `GoogleChatNotConfiguredError` → 503; Google 4xx/5xx or network error → `GoogleChatError` → 502 with Google's status; never log the token or key | [ ] |
-| 2 | Token reuse and failures | Tests: two sends mint one token; expired token re-mints; 401 → re-mint + retry once, second 401 → 502; empty setting / missing file / bad JSON → 503; Chat 403/404 → 502; token endpoint 400 → 502 | [ ] |
+| 2 | Token reuse and failures | `GoogleChatNotConfiguredError` → 503; Google 4xx/5xx or network error → `GoogleChatError` → 502 with Google's status; never log the token or key | [x] |
+| 2 | Token reuse and failures | Tests: two sends mint one token; expired token re-mints; 401 → re-mint + retry once, second 401 → 502; empty setting / missing file / bad JSON → 503; Chat 403/404 → 502; token endpoint 400 → 502 | [x] |
 | 3 | Docs | `docs/wiki/google-bot.md`: "Sending messages" section (setup, env var, endpoint, troubleshooting); one line in `docs/wiki/index.md` | [ ] |
 
 ## Context

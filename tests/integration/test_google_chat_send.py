@@ -1,4 +1,5 @@
 import json
+from collections.abc import Iterator
 from urllib.parse import parse_qs
 
 import httpx
@@ -6,8 +7,10 @@ import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from app.core.google_chat_client import GoogleChatClient
+from app.core.google_chat_client import GoogleChatClient, get_google_chat_client
+from app.core.logger import logger
 from app.core.security import create_token
+from app.main import app
 from tests.google_chat_helpers import (
     CHAT_TOKEN,
     SA_EMAIL,
@@ -87,3 +90,77 @@ async def test_invalid_body_422(
     r = await client.post(URL, json=body, headers=auth)
     assert r.status_code == 422
     assert chat_api.requests == []
+
+
+BODY = {"space": "spaces/AAA", "text": "hi"}
+
+
+@pytest.fixture
+def log_records() -> Iterator[list[dict]]:
+    records: list[dict] = []
+    sink = logger.add(lambda m: records.append(m.record), level="DEBUG")
+    yield records
+    logger.remove(sink)
+
+
+async def test_not_configured_503(
+    client: httpx.AsyncClient, chat_api: ChatApiServer, auth: dict[str, str]
+):
+    async with httpx.AsyncClient(transport=chat_api.transport) as http:
+        unconfigured = GoogleChatClient(http, "")
+        app.dependency_overrides[get_google_chat_client] = lambda: unconfigured
+        r = await client.post(URL, json=BODY, headers=auth)
+
+    assert r.status_code == 503
+    assert r.json() == {"detail": "Google Chat sending is not configured"}
+    assert chat_api.requests == []
+
+
+@pytest.mark.parametrize("status", [403, 404])
+async def test_chat_rejection_502_without_secrets_in_logs(
+    client: httpx.AsyncClient,
+    google_chat_client: GoogleChatClient,
+    chat_api: ChatApiServer,
+    auth: dict[str, str],
+    log_records: list[dict],
+    status: int,
+):
+    chat_api.chat_status = status
+
+    r = await client.post(URL, json=BODY, headers=auth)
+
+    assert r.status_code == 502
+    assert r.json() == {"detail": f"Google Chat rejected the message ({status})"}
+    logged = " ".join(rec["message"] for rec in log_records)
+    assert f"chat said {status}" in logged
+    for secret in ("Bearer", "assertion", "PRIVATE KEY", CHAT_TOKEN):
+        assert secret not in logged
+
+
+async def test_token_endpoint_rejection_502(
+    client: httpx.AsyncClient,
+    google_chat_client: GoogleChatClient,
+    chat_api: ChatApiServer,
+    auth: dict[str, str],
+):
+    chat_api.token_status = 400
+
+    r = await client.post(URL, json=BODY, headers=auth)
+
+    assert r.status_code == 502
+    assert r.json() == {"detail": "Google Chat rejected the message (400)"}
+    assert chat_api.chat_requests == []
+
+
+async def test_timeout_502_without_status(
+    client: httpx.AsyncClient,
+    google_chat_client: GoogleChatClient,
+    chat_api: ChatApiServer,
+    auth: dict[str, str],
+):
+    chat_api.chat_error = httpx.ConnectTimeout("slow")
+
+    r = await client.post(URL, json=BODY, headers=auth)
+
+    assert r.status_code == 502
+    assert r.json() == {"detail": "Google Chat rejected the message (None)"}

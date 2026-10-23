@@ -1,5 +1,6 @@
 """Google Chat webhook test helpers: constants, a throwaway RSA key, a fake certs endpoint."""
 
+import asyncio
 import copy
 import json
 from pathlib import Path
@@ -85,12 +86,19 @@ def write_service_account_file(path: Path, key: rsa.RSAPrivateKey) -> str:
 
 
 class ChatApiServer:
-    """Fake token endpoint + Chat API. Records every request; the Chat reply is scriptable."""
+    """Fake token endpoint + Chat API. Records every request; replies are scriptable.
+
+    `chat_statuses` is consumed one per Chat call (then `chat_status` repeats); `token_error` /
+    `chat_error` are raised instead of answering, like a network failure.
+    """
 
     def __init__(self) -> None:
         self.requests: list[httpx.Request] = []
         self.token_status = 200
         self.chat_status = 200
+        self.chat_statuses: list[int] = []
+        self.token_error: Exception | None = None
+        self.chat_error: Exception | None = None
         self.message_name = "spaces/AAA/messages/M1"
         self.transport = httpx.MockTransport(self._handle)
 
@@ -102,10 +110,21 @@ class ChatApiServer:
     def chat_requests(self) -> list[httpx.Request]:
         return [r for r in self.requests if r.url.host == "chat.googleapis.com"]
 
-    def _handle(self, request: httpx.Request) -> httpx.Response:
+    async def _handle(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
+        await asyncio.sleep(0)  # a real network call yields; lets concurrent callers interleave
         if str(request.url) == TOKEN_URI:
-            return httpx.Response(
-                self.token_status, json={"access_token": CHAT_TOKEN, "expires_in": 3600}
-            )
-        return httpx.Response(self.chat_status, json={"name": self.message_name})
+            if self.token_error is not None:
+                raise self.token_error
+            if self.token_status != 200:
+                return httpx.Response(
+                    self.token_status,
+                    json={"error": "invalid_grant", "error_description": "Invalid JWT"},
+                )
+            return httpx.Response(200, json={"access_token": CHAT_TOKEN, "expires_in": 3600})
+        if self.chat_error is not None:
+            raise self.chat_error
+        status = self.chat_statuses.pop(0) if self.chat_statuses else self.chat_status
+        if status >= 400:
+            return httpx.Response(status, json={"error": {"message": f"chat said {status}"}})
+        return httpx.Response(status, json={"name": self.message_name})
