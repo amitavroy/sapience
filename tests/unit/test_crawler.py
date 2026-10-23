@@ -357,8 +357,9 @@ def test_missing_collection_logs_a_warning_without_raising(
     assert warnings(logs) == ["collection 99 not found"]
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def embeds(monkeypatch: pytest.MonkeyPatch) -> list[tuple]:
+    """No broker in tests: record embed_document enqueues instead of publishing them."""
     calls: list[tuple] = []
     monkeypatch.setattr(
         crawler_tasks.embedding_tasks.embed_document,

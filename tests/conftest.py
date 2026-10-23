@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import httpx
 import jwt
 import pytest
+from celery import Celery
 from cryptography.hazmat.primitives.asymmetric import rsa
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -14,6 +15,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-not-for-production-use")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")  # never connected
 os.environ.setdefault("LOG_FILE_LEVEL", "")  # tests never write to logs/
+os.environ["CELERY_BROKER_URL"] = "redis://127.0.0.1:1/0"  # dead on purpose; never the .env broker
 
 from app.core.config import settings  # noqa: E402
 from app.core.deps import get_db  # noqa: E402
@@ -29,6 +31,16 @@ from tests.google_chat_helpers import (  # noqa: E402
     new_rsa_key,
     public_jwk,
 )
+
+
+@pytest.fixture(autouse=True)
+def no_celery_publish(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fail any test that publishes a task instead of stubbing it, with or without Redis."""
+
+    def refuse(self, name, *args, **kwargs):
+        raise AssertionError(f"test published Celery task {name!r}: stub .delay or dispatch")
+
+    monkeypatch.setattr(Celery, "send_task", refuse)
 
 
 @pytest.fixture(autouse=True)
