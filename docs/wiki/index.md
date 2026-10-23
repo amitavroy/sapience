@@ -96,7 +96,7 @@ When a row is deleted:
 
 # Google Chat webhook
 
-Google Chat @mentions and slash commands arrive at `POST /ingest/google-chat`. The endpoint verifies Google's ID token (401 on failure), replies "Got it" straight away, and queues the event for a Celery worker, which handles mentions and slash commands separately. Setup, env vars, event kinds and local testing: [google-bot.md](google-bot.md).
+Google Chat @mentions and slash commands arrive at `POST /ingest/google-chat`. The endpoint verifies Google's ID token (401 on failure), replies "Got it" straight away, and queues the event for a Celery worker, which handles mentions and slash commands separately. Setup, env vars, event kinds and local testing: [google-bot.md](google-bot.md). The app can also post to a space itself (`POST /google-chat/messages`, own service account); see "Sending messages" in the same file.
 
 # Web page crawl
 

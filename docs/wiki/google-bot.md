@@ -139,6 +139,52 @@ Free ngrok URLs and the audience must stay in step: a new tunnel host means upda
 
 The global per-IP `rate_limit` dependency applies to this endpoint too (default `60/minute`, see Request pipeline). Google sends from a small pool of IPs, and behind a proxy or tunnel the client IP may be one shared address, so a busy space could be throttled with 429s. This is a known risk, left unchanged in this ticket. The likely follow-up is to exempt `/ingest/*` or give it its own limit.
 
+# Sending messages
+
+The app can also post to a space on its own through the Chat API (`spaces.messages.create`). This is the path the worker will use to answer long after the webhook response has gone. For now it is exposed as an authenticated test endpoint.
+
+    POST /google-chat/messages  {"space": "spaces/AAA", "text": "hi"}  (Bearer JWT)
+        → router → google_chat.send_message → GoogleChatClient.create_message
+              ├─ mint access token (cached) → POST https://chat.googleapis.com/v1/spaces/AAA/messages
+              └─ 200 {"name": "spaces/AAA/messages/BBB"}
+
+| Case | Status | Body |
+|------|--------|------|
+| Message posted | 200 | `{"name": "spaces/…/messages/…"}` |
+| No or invalid JWT | 401 | |
+| `space` not `spaces/<id>`, or `text` empty, blank or over 4000 chars | 422 | |
+| `GOOGLE_CHAT_CREDENTIALS_FILE` empty, file missing or unreadable | 503 | `Google Chat sending is not configured` |
+| Token endpoint or Chat rejects the call (e.g. 403/404), or the request fails | 502 | `Google Chat rejected the message (<status>)` (`None` when there was no response) |
+
+- The app posts as itself (`chat.bot` scope), not as a user. It must already be a member of the target space, otherwise Chat answers 403/404.
+- `GOOGLE_CHAT_SERVICE_ACCOUNT_EMAIL` cannot be used for this: it is Google-managed and only identifies Google on inbound events. Sending needs a service account we own.
+- Tokens are minted with PyJWT and `httpx` (JWT-bearer grant), not `google-auth`, which refreshes synchronously and would block the event loop. A token is reused until 60 s before it expires, one mint under concurrent sends. A 401 from Chat drops the token, mints a new one and retries once.
+- The credentials file is read on the first send, not at startup, so the API boots with the setting empty. Plain text only for now (Chat markup like `*bold*` works); no threads, no cards.
+- Logs carry Google's status and error message, never the access token, the assertion or the key.
+
+## Setup
+
+1. In the Google Cloud project that hosts the Chat app: IAM & Admin → Service accounts → Create. No project roles are needed. The service account must be in the same project as the Chat app, the same project number as in `GOOGLE_CHAT_SERVICE_ACCOUNT_EMAIL`.
+2. Keys → Add key → JSON. Save it as `secrets/google-chat-sa.json`. The folder's own `.gitignore` keeps everything in it out of git; never commit the key.
+3. In `.env`: `GOOGLE_CHAT_CREDENTIALS_FILE=secrets/google-chat-sa.json`. Restart the API (and later the worker).
+4. Make sure the Chat API is enabled in the project (it is if events arrive).
+5. Find the space id: open the space in the browser; `https://chat.google.com/room/<id>` gives `spaces/<id>`. The webhook log line `google chat message space=spaces/…` shows it too.
+6. Add the app to the space (@mention it once or use "Apps & integrations").
+
+## Trying it from Bruno
+
+1. Run `login.bru`, which stores the token. It expires after 30 minutes.
+2. In the Bruno environment, set the secret variable `spaceId` to the id after `spaces/`. Secret values stay in your local Bruno and never reach the repo.
+3. Run `send-chat-message.bru`. The message appears in the space from the app, and the response `name` matches it.
+
+| Symptom | Likely cause |
+|---------|--------------|
+| 401 `Invalid or expired token` | Token missing or older than 30 minutes: run `login.bru` again |
+| 503 | `GOOGLE_CHAT_CREDENTIALS_FILE` is empty, the file is missing, or the API was not restarted after setting it |
+| 502 `(403)` or `(404)` | The app is not in that space, or the space id is wrong |
+| 502 `(403)` for a space the app is in | The key's service account is in a different project than the Chat app |
+| 502 `(400)` | Google's token endpoint rejected the key (revoked or deleted key, or a bad system clock) |
+
 # Tests
 
 No test makes a network call. Tokens are signed with a throwaway RSA key, and Google's certs endpoint is replaced by `httpx.MockTransport` (`tests/google_chat_helpers.py`, fixtures in `tests/conftest.py`). Three real captured events, a space message, a DM and a slash command (`google-slash-command.json`), are stored sanitized in `tests/fixtures/` and drive the endpoint and worker tests. The test client does not run the app lifespan, so tests override `get_google_verifier`.
