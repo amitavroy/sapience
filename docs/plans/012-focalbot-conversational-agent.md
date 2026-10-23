@@ -11,9 +11,9 @@ Each slice ends in a working, reviewable state with passing tests. Pause for rev
 | 1 | Bot answers with memory | `app/agent/models.py`: `get_model(role)` factory (cached per role) | [x] |
 | 1 | Bot answers with memory | `app/agent/state.py`, `prompts.py`, `graph.py`: `ConversationState`, system prompt, `build_graph(checkpointer)` = `agent` (`create_agent` subgraph, no tools yet) → `finalize` | [x] |
 | 1 | Bot answers with memory | `app/agent/checkpointer.py`: `open_checkpointer()` (AsyncPostgresSaver from `DATABASE_URL`); `uv run cli setup-checkpointer`; `make migrate` runs it after Alembic | [x] |
-| 1 | Bot answers with memory | `app/services/conversation.py`: `thread_id(space, user)`, `run_turn(...) -> str` | [ ] |
-| 1 | Bot answers with memory | `app/services/google_chat.py`: `_handle_mention` → DM: "I only work in spaces"; empty text: hint; else `run_turn` → `send_message`; failure → "Sorry, something went wrong" | [ ] |
-| 1 | Bot answers with memory | Tests: fake model + `InMemorySaver`; two turns same (space, user) share history; different user or space doesn't; DM / empty / failure replies; `finalize` truncation | [ ] |
+| 1 | Bot answers with memory | `app/services/conversation.py`: `thread_id(space, user)`, `run_turn(...) -> str` | [x] |
+| 1 | Bot answers with memory | `app/services/google_chat.py`: `_handle_mention` → DM: "I only work in spaces"; empty text: hint; else `run_turn` → `send_message`; failure → "Sorry, something went wrong" | [x] |
+| 1 | Bot answers with memory | Tests: fake model + `InMemorySaver`; two turns same (space, user) share history; different user or space doesn't; DM / empty / failure replies; `finalize` truncation | [x] |
 | 1 | Bot answers with memory | Manual: @FocalBot in a space, follow-up question uses earlier context; second user gets a fresh conversation | [ ] |
 | 2 | FIFO per conversation | `app/services/conversation_queue.py`: Redis list + lock + dedup keys; `enqueue`, `drain` | [ ] |
 | 2 | FIFO per conversation | `app/tasks/conversation.py`: `drain_conversation(space, user, trace_id)` task; `_handle_mention` enqueues + dispatches instead of running inline | [ ] |
