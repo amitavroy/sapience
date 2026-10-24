@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     google_chat_service_account_email: str = ""  # service-<project-number>@gcp-sa-gsuiteaddons...
     # our own service account JSON key, for posting via the Chat API; empty = sending disabled
     google_chat_credentials_file: str = ""
+    # command ID registered for /reset in the Chat API console; 0 = not configured
+    google_chat_reset_command_id: int = 0
     # web page crawler
     crawler_user_agent: str = (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "

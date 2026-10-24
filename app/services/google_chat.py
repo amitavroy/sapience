@@ -16,6 +16,7 @@ ACK = "Got it"
 DM_REPLY = "I only work in spaces. Mention me in a space."
 EMPTY_REPLY = "Ask me something after the mention."
 FAILURE_REPLY = "Sorry, something went wrong. Please try again."
+RESET_REPLY = "Conversation cleared."
 
 
 def reply(text: str) -> dict:
@@ -81,12 +82,28 @@ async def _handle_mention(payload: MessagePayload) -> None:
 
 
 async def _handle_command(payload: AppCommandPayload) -> None:
-    """For now it only logs the command; ingestion of /add-knowledge comes later."""
+    """/reset goes through the conversation queue; other commands are only logged for now."""
     msg = payload.message
     sender = msg.sender.email if msg.sender else None
     text = (msg.argument_text or msg.text).strip()
     command_id = payload.app_command_metadata.app_command_id
-    logger.info(
-        f"google chat command id={command_id} space={payload.space.name} "
-        f"sender={sender} text={text!r}"
+    space = payload.space.name
+    logger.info(f"google chat command id={command_id} space={space} sender={sender} text={text!r}")
+    reset_id = settings.google_chat_reset_command_id
+    if not reset_id or command_id != reset_id or msg.sender is None:
+        return
+
+    item = conversation_queue.QueueItem(
+        kind="reset",
+        space=space,
+        user=msg.sender.name,
+        message_name=msg.name,
+        display_name=msg.sender.display_name or msg.sender.name,
+        trace_id=trace_id.get(),
     )
+    # queued like a message, so a turn that is mid-run is not raced and earlier messages
+    # are answered before the memory is cleared
+    async with conversation_queue.open_redis() as redis:
+        queued = await conversation_queue.enqueue(redis, item)
+    logger.info(f"conversation reset queued={queued} space={space} message={msg.name}")
+    await dispatch(conversation_tasks.drain_conversation, space, item.user, item.trace_id)

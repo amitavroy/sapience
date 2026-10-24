@@ -161,8 +161,34 @@ async def _logged(what: str, write: Awaitable[None]) -> None:
         logger.error(f"conversation log {what} failed: {_describe(e)}")
 
 
+async def reset(space: str, user: str) -> None:
+    """Forget the agent's memory for this conversation; the conversation log is kept."""
+    async with open_checkpointer() as checkpointer:
+        await checkpointer.adelete_thread(thread_id(space, user))
+
+
+async def _process_reset(chat: GoogleChatClient, item: QueueItem) -> None:
+    try:
+        await reset(item.space, item.user)
+        reply = google_chat_service.RESET_REPLY
+    except Exception as e:
+        logger.error(f"conversation reset failed space={item.space}: {_describe(e)}")
+        reply = google_chat_service.FAILURE_REPLY
+    try:
+        await _with_retries(
+            lambda: google_chat_service.send_message(chat, item.space, reply),
+            "reset reply post",
+            item.space,
+        )
+    except Exception as e:
+        logger.error(f"could not post the reset reply: {_describe(e)}")
+
+
 async def process_item(chat: GoogleChatClient, log: ConversationLog, item: QueueItem) -> None:
     """Handle one queued item; never raises, so the drain can always pop it."""
+    if item.kind == "reset":
+        await _process_reset(chat, item)
+        return
     if item.kind != "message":
         logger.warning(f"unsupported queue item kind={item.kind} space={item.space}")
         return

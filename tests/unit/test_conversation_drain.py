@@ -101,11 +101,11 @@ async def test_unsupported_item_kind_is_skipped_with_a_warning(
 ) -> None:
     chat = FakeChat()
 
-    await conversation.process_item(chat, NullLog(), ITEM.model_copy(update={"kind": "reset"}))
+    await conversation.process_item(chat, NullLog(), ITEM.model_copy(update={"kind": "bogus"}))
 
     assert turns == []
     assert chat.sent == []
-    assert any("unsupported queue item kind=reset" in r["message"] for r in logs)
+    assert any("unsupported queue item kind=bogus" in r["message"] for r in logs)
 
 
 async def test_graph_that_cannot_be_opened_still_gets_the_apology(

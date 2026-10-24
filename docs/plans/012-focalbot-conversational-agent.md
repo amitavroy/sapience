@@ -25,7 +25,7 @@ Each slice ends in a working, reviewable state with passing tests. Pause for rev
 | 3 | Conversation log | Wire into the drain: `app/tasks/conversation.py` defines `TaskConversationLog`, which implements the `ConversationLog` protocol: each method opens `task_session()` and calls the service. `process_item(chat, log, item)` builds the `ConversationKey` and writes the user message before the turn and the reply and final status after it | [x] |
 | 3 | Conversation log | Tests (SQLite): conversation created once per thread; user message + reply recorded; failure → status `failed` + error + apology row; expiry → `expired`; redelivered item doesn't duplicate rows; a DB failure on the first write, or on the last write, never blocks the reply | [x] |
 | 3 | Conversation log | Manual: send two mentions, then `select` from `conversations` and `messages` in psql and read both exchanges; force a failure and see `failed` | [x] |
-| 4 | /reset | `GOOGLE_CHAT_RESET_COMMAND_ID` setting; `_handle_command` routes that id to `enqueue(kind="reset")`; drain deletes the thread and posts "Conversation cleared" | [ ] |
+| 4 | /reset | `GOOGLE_CHAT_RESET_COMMAND_ID` setting; `_handle_command` routes that id to `enqueue(kind="reset")`; drain deletes the thread and posts "Conversation cleared" | [x] |
 | 4 | /reset | Tests: reset after messages clears only that (space, user); other user/space intact; queued-before-reset messages answered first; unknown command id still just logs | [ ] |
 | 4 | /reset | Manual: register `/reset` in the Chat console, run it, follow-up has no memory | [ ] |
 | 5 | Knowledge tool | `app/agent/tools/knowledge.py`: `search_knowledge(query)` returns a fixed string; space read from runtime context; wired into the agent | [ ] |
