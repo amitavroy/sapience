@@ -16,18 +16,23 @@ Each slice ends in a working, reviewable state with passing tests. Pause for rev
 | 1 | Bot answers with memory | Tests: fake model + `InMemorySaver`; two turns same (space, user) share history; different user or space doesn't; DM / empty / failure replies; `finalize` truncation | [x] |
 | 1 | Bot answers with memory | Manual: @FocalBot in a space, follow-up question uses earlier context; second user gets a fresh conversation | [x] |
 | 2 | FIFO per conversation | `app/services/conversation_queue.py`: Redis list + lock + dedup keys; `enqueue`, `drain` | [x] |
-| 2 | FIFO per conversation | `app/tasks/conversation.py`: `drain_conversation(space, user, trace_id)` task; `_handle_mention` enqueues + dispatches instead of running inline | [ ] |
+| 2 | FIFO per conversation | `app/tasks/conversation.py`: `drain_conversation(space, user, trace_id)` task; `_handle_mention` enqueues + dispatches instead of running inline | [x] |
 | 2 | FIFO per conversation | In-drain retries (5 s, 15 s, 60 s), 15 min message expiry, fork-from-pre-turn-checkpoint on retry, clean "sorry" checkpoint on final failure | [ ] |
 | 2 | FIFO per conversation | Tests (fake Redis): order kept; second drain exits while locked; nothing stranded after release; duplicate message name ignored; retry then success; final failure posts sorry and continues; expired message dropped; retry doesn't duplicate history | [ ] |
 | 2 | FIFO per conversation | Manual: send 3 quick mentions; replies arrive in order, each referencing the previous | [ ] |
-| 3 | /reset | `GOOGLE_CHAT_RESET_COMMAND_ID` setting; `_handle_command` routes that id to `enqueue(kind="reset")`; drain deletes the thread and posts "Conversation cleared" | [ ] |
-| 3 | /reset | Tests: reset after messages clears only that (space, user); other user/space intact; queued-before-reset messages answered first; unknown command id still just logs | [ ] |
-| 3 | /reset | Manual: register `/reset` in the Chat console, run it, follow-up has no memory | [ ] |
-| 4 | Knowledge tool | `app/agent/tools/knowledge.py`: `search_knowledge(query)` returns a fixed string; space read from runtime context; wired into the agent | [ ] |
-| 4 | Knowledge tool | Tests: scripted tool call → tool runs with the space from context → answer uses its output; tool not exposed a `space` argument | [ ] |
-| 5 | Summarization | `SummarizationMiddleware(model=get_model("summary"), trigger=("tokens", 8000), keep=("messages", 20))` on the agent | [ ] |
-| 5 | Summarization | Tests: below threshold no summary call; above → history replaced by summary + last 20, persisted in the checkpoint | [ ] |
-| 6 | Docs | `docs/wiki/conversation.md` (flow, queue, reset, settings, troubleshooting); `docs/wiki/google-bot.md` "What the worker does" updated; `docs/wiki/index.md` line | [ ] |
+| 3 | Conversation log | `app/models/conversation.py`: `Conversation`, `Message`; import both in `app/models/__init__.py`; Alembic migration | [ ] |
+| 3 | Conversation log | `app/services/conversation_log.py` (defines `ConversationKey` and the `ConversationLog` protocol; its functions take an `AsyncSession`; each function also takes a `ConversationKey` and finds or creates the conversation itself in the same transaction): `record_user_message` (insert-if-absent), `finish_user_message` (upsert: creates the user row if missing, then sets status; the only status writer), `record_reply` (upsert of the one assistant row per user message) | [ ] |
+| 3 | Conversation log | Wire into the drain: `app/tasks/conversation.py` defines `TaskConversationLog`, which implements the `ConversationLog` protocol: each method opens `task_session()` and calls the service. `process_item(chat, log, item)` builds the `ConversationKey` and writes the user message before the turn and the reply and final status after it | [ ] |
+| 3 | Conversation log | Tests (SQLite): conversation created once per thread; user message + reply recorded; failure → status `failed` + error + apology row; expiry → `expired`; redelivered item doesn't duplicate rows; a DB failure on the first write, or on the last write, never blocks the reply | [ ] |
+| 3 | Conversation log | Manual: send two mentions, then `select` from `conversations` and `messages` in psql and read both exchanges; force a failure and see `failed` | [ ] |
+| 4 | /reset | `GOOGLE_CHAT_RESET_COMMAND_ID` setting; `_handle_command` routes that id to `enqueue(kind="reset")`; drain deletes the thread and posts "Conversation cleared" | [ ] |
+| 4 | /reset | Tests: reset after messages clears only that (space, user); other user/space intact; queued-before-reset messages answered first; unknown command id still just logs | [ ] |
+| 4 | /reset | Manual: register `/reset` in the Chat console, run it, follow-up has no memory | [ ] |
+| 5 | Knowledge tool | `app/agent/tools/knowledge.py`: `search_knowledge(query)` returns a fixed string; space read from runtime context; wired into the agent | [ ] |
+| 5 | Knowledge tool | Tests: scripted tool call → tool runs with the space from context → answer uses its output; tool not exposed a `space` argument | [ ] |
+| 6 | Summarization | `SummarizationMiddleware(model=get_model("summary"), trigger=("tokens", 8000), keep=("messages", 20))` on the agent | [ ] |
+| 6 | Summarization | Tests: below threshold no summary call; above → history replaced by summary + last 20, persisted in the checkpoint | [ ] |
+| 7 | Docs | `docs/wiki/conversation.md` (flow, queue, conversation log, reset, settings, troubleshooting); `docs/wiki/google-bot.md` "What the worker does" updated; `docs/wiki/index.md` line | [ ] |
 
 ## Context
 
@@ -46,7 +51,7 @@ Decisions settled in the design discussion:
 
 ## Decisions
 
-1. **LangGraph checkpointer is the conversation store.** `AsyncPostgresSaver` (`langgraph-checkpoint-postgres`) keeps the full graph state, messages included, keyed by `thread_id`. There are no `conversations` / `messages` tables of our own: the checkpointer already does history, forking and deletion (`adelete_thread`). It brings psycopg 3 alongside asyncpg; the conninfo is derived from `DATABASE_URL` (`postgresql+asyncpg://` → `postgresql://`).
+1. **LangGraph checkpointer is the agent's memory, not the record.** `AsyncPostgresSaver` (`langgraph-checkpoint-postgres`) keeps the full graph state, messages included, keyed by `thread_id`. It does history, forking and deletion (`adelete_thread`) for the agent. It brings psycopg 3 alongside asyncpg; the conninfo is derived from `DATABASE_URL` (`postgresql+asyncpg://` → `postgresql://`). The checkpoint stores messages as serialized blobs and is rewritten on purpose (`/reset` deletes the thread, summarization replaces old messages, retries fork branches), so it cannot be read as a history. The readable record is the conversation log (Decision 19).
 2. **Checkpointer tables via a CLI command, not Alembic.** `AsyncPostgresSaver.setup()` owns and migrates its own tables (it tracks its own versions). Mirroring them in Alembic would fight it. `uv run cli setup-checkpointer` calls `setup()`, which is idempotent. `make migrate` runs it after `alembic upgrade head`, so one command still prepares the database.
 3. **Thread id = `gchat:{space}:{user}`.** For example `gchat:spaces/AAA:users/123`. It uses `sender.name` (stable) rather than email (can change, and is optional in the payload). Messages without a sender are ignored.
 4. **Spaces only.** `space.type == "DM"` (the DM fixture has `type: DM`, `spaceType: DIRECT_MESSAGE`) gets one reply, "I only work in spaces. Mention me in a space.", and no agent run. A mention with no text after `@FocalBot` gets "Ask me something after the mention." and no agent run.
@@ -120,6 +125,21 @@ Decisions settled in the design discussion:
     It lives in `app/agent/prompts.py`.
 17. **Ack unchanged.** The webhook still replies "Got it" synchronously. "Thinking…" then edit-in-place is a later change on the GH-6 client.
 18. **Worker concurrency note.** `make worker` uses `--pool=solo` (one task at a time), so locally the drain also blocks other chat events and crawls while a turn runs. That's correct but slow. Production should run with more than one worker process; the queue and lock are what make that safe.
+19. **Conversation log: readable record in our own tables.** Two tables, separate from the checkpointer, written by the drain. They are the record; the checkpointer stays the agent's memory (Decision 1). They are channel-neutral, so a web interface can write to them later.
+
+    | Table | Columns |
+    |-------|---------|
+    | `conversations` | `id`, `channel` (`google_chat` \| `web`), `thread_id` (LangGraph thread id; unique with `channel`), `space` (nullable), `external_user` (nullable; the Chat `users/…` id), `display_name`, `user_id` (nullable FK to `users`, for a future web login), `created_at`, `last_message_at` |
+    | `messages` | `id`, `conversation_id` (FK), `role` (`user` \| `assistant`), `content`, `external_id` (nullable; unique per conversation: the Chat message name on user rows, `{message_name}#reply` on assistant rows), `chat_message_name` (nullable; the name of the reply Chat posted), `status` (`pending` \| `answered` \| `failed` \| `expired` on user rows; null on assistant rows), `error` (nullable), `created_at` |
+
+    - **API.** Every function takes a `ConversationKey` (a frozen dataclass in `conversation_log.py`: `channel`, `thread_id`, `space`, `external_user`, `display_name`; `process_item` builds it from the queue item with `channel="google_chat"`, `thread_id(space, user)`, and the item's `display_name`) and finds or creates the conversation itself, in the same session and transaction as its write. There is no separate "get or create" step for the caller, and no write depends on an earlier one having succeeded.
+    - **Write order.** Before the turn: `record_user_message(db, key, message_name, text)` inserts the user row as `pending`. After it: `record_reply(db, key, message_name, text, chat_message_name)` writes the assistant row (the reply, or the apology on failure or expiry), and `finish_user_message(db, key, message_name, text, status, error)` sets the user row to `answered`, `failed` (with the error type and message) or `expired`. `finish_user_message` is an upsert: if the first write failed, or the item expired before it was ever logged, it creates the user row (from `text`) and then sets the status, so the outcome is never lost. An expired item gets the same treatment, with the apology as the assistant row.
+    - **Redelivery (peek-then-pop, Decision 9).** `record_user_message` is insert-if-absent and never resets an existing status to `pending`. `finish_user_message` is the only writer of `status`, and the latest outcome wins, because it is what the user last saw. `record_reply` keys the assistant row on `{message_name}#reply`, so a rerun updates that row's content and `chat_message_name` instead of adding a second reply row. The Chat message name of a rerun's reply differs, which is why it is stored in its own column and not in `external_id`.
+    - **Sessions.** A DB session is never held across the LLM call or the Chat post. Services take an `AsyncSession` and never open one (`docs/architecture/index.md`), so the entry point supplies the log. `ConversationLog` is a `Protocol` in `app/services/conversation_log.py` (methods without a session: `record_user_message(key, message_name, text)`, `record_reply(...)`, `finish_user_message(...)`), which is what `drain` and `process_item` are typed against. `TaskConversationLog`, in `app/tasks/conversation.py`, implements it: each method opens `task_session()` for one write and calls `conversation_log.*(db, ...)`. `process_item` takes the log and never sees a session. Tests pass a fake or one backed by the SQLite session.
+    - **Best effort.** A failing log write is logged and never blocks the reply or the pop: the bot's answer matters more than its record. Because every function finds or creates the conversation and the user row itself, a failed first write costs nothing but a short window in which the row is missing.
+    - **Reset.** `/reset` clears the agent's memory only. The conversation row and its messages stay.
+    - **Thread id.** For Google Chat `thread_id` stays `gchat:{space}:{user}`, so nothing about existing checkpoints changes. A web channel would use its own scheme.
+    - **Out of scope here.** Model name, token counts and latency per reply (add as columns later), a UI to browse the log, and a retention policy.
 
 ## Code sketches
 
@@ -247,14 +267,26 @@ async def drain(
 `app/tasks/conversation.py`
 
 ```python
+class TaskConversationLog:
+    """Slice 3: each method opens a short session, so none is held across the LLM or Chat call."""
+
+    async def record_user_message(self, key, message_name, text) -> None:
+        async with task_session() as db:
+            await conversation_log.record_user_message(db, key, message_name, text)
+
+    # record_reply and finish_user_message the same way
+
+
 @celery_app.task
 def drain_conversation(space: str, user: str, trace_id: str) -> None:
     with logger.contextualize(trace_id=trace_id, job="drain_conversation"):
         # SYNC-EXCEPTION: Celery task bodies are sync; asyncio.run drives the async work
-        asyncio.run(conversation_service.drain(space, user))
+        asyncio.run(conversation_service.drain(space, user, TaskConversationLog()))
 ```
 
-`app/services/conversation.drain` opens the per-task resources (Redis client, checkpointer, httpx + `GoogleChatClient`), builds the graph once, and passes a `process` callback that does the turn, retry, post, and failure handling.
+Until slice 3 lands, the task calls `conversation_service.drain(space, user)` with no log.
+
+`app/services/conversation.drain` opens the per-task resources (Redis client, httpx + `GoogleChatClient`) and passes a `process` callback that does the turn, retry, post, and failure handling. It opens the graph (and so the checkpointer connection) per item inside the error handling, so a missing LLM key or an unreachable database still ends in the apology. From slice 3 the task also passes a `ConversationLog` (Decision 19): `conversation_service.drain(space, user, log)`.
 
 `.env.example` (additions)
 
@@ -278,25 +310,28 @@ GOOGLE_CHAT_RESET_COMMAND_ID=0
 | File | Slice | Purpose |
 |------|-------|---------|
 | `pyproject.toml`, `uv.lock` | 1 | New dependencies |
-| `app/core/config.py`, `.env.example` | 1, 3 | LLM settings (1); reset command id (3) |
+| `app/core/config.py`, `.env.example` | 1, 4 | LLM settings (1); reset command id (4) |
 | `app/agent/__init__.py` | 1 | Package |
 | `app/agent/models.py` | 1 | `get_model(role)` |
 | `app/agent/state.py` | 1 | `ConversationState`, `ConversationContext` |
 | `app/agent/prompts.py` | 1 | System prompt |
-| `app/agent/graph.py` | 1, 4, 5 | `build_graph`, `finalize` (1); tools (4); middleware (5) |
+| `app/agent/graph.py` | 1, 5, 6 | `build_graph`, `finalize` (1); tools (5); middleware (6) |
 | `app/agent/checkpointer.py` | 1 | `open_checkpointer()` async context manager |
-| `app/agent/tools/__init__.py`, `tools/knowledge.py` | 4 | `TOOLS`, `search_knowledge` |
-| `app/services/conversation.py` | 1, 2, 3 | `run_turn` (1); drain + process callback, retries, failure checkpoint (2); reset (3) |
+| `app/agent/tools/__init__.py`, `tools/knowledge.py` | 5 | `TOOLS`, `search_knowledge` |
+| `app/services/conversation.py` | 1, 2, 3, 4 | `run_turn` (1); drain + process callback, retries, failure checkpoint (2); log writes in `process_item` (3); reset (4) |
 | `app/services/conversation_queue.py` | 2 | Redis queue, lock, dedup |
-| `app/services/google_chat.py` | 1, 2, 3 | Mention → conversation (1); enqueue + dispatch (2); reset command (3) |
-| `app/tasks/conversation.py`, `app/core/celery_app.py` | 2 | `drain_conversation` task; add to `include` |
+| `app/models/conversation.py`, `app/models/__init__.py`, `alembic/versions/` | 3 | `Conversation`, `Message`; migration |
+| `app/services/conversation_log.py` | 3 | `ConversationKey`, the `ConversationLog` protocol, and the functions that record user message, reply and final status; each call finds or creates the conversation |
+| `tests/unit/test_conversation_log.py` | 3 | Log service and its wiring in `process_item` |
+| `app/services/google_chat.py` | 1, 2, 4 | Mention → conversation (1); enqueue + dispatch (2); reset command (4) |
+| `app/tasks/conversation.py`, `app/core/celery_app.py` | 2, 3 | `drain_conversation` task; add to `include` (2); `TaskConversationLog` (implements the protocol, opens `task_session()` per write) (3) |
 | `app/cli/__main__.py`, `Makefile` | 1 | `setup-checkpointer`; `make migrate` runs it |
 | `tests/agent_helpers.py` | 1 | Fake model factory (`GenericFakeChatModel` with scripted messages / tool calls), fake Chat client recorder |
-| `tests/unit/test_conversation_graph.py` | 1, 4, 5 | Graph, memory, tool, summarization |
+| `tests/unit/test_conversation_graph.py` | 1, 5, 6 | Graph, memory, tool (5), summarization (6) |
 | `tests/unit/test_conversation_queue.py` | 2 | Queue / lock / dedup / retry / expiry |
-| `tests/unit/test_google_chat_task.py` | 1, 2, 3 | Handler routing (DM, empty, mention, reset) |
+| `tests/unit/test_google_chat_task.py` | 1, 2, 4 | Handler routing (DM, empty, mention, reset) |
 | `tests/conftest.py` | 2 | Stub `app.services.google_chat.dispatch` in the `dispatched` fixture |
-| `docs/wiki/conversation.md`, `docs/wiki/google-bot.md`, `docs/wiki/index.md` | 6 | Docs |
+| `docs/wiki/conversation.md`, `docs/wiki/google-bot.md`, `docs/wiki/index.md` | 7 | Docs |
 
 ## Testing plan
 
@@ -329,17 +364,28 @@ The checkpointer's Postgres behaviour is LangGraph's own and is not re-tested; `
 - Lock release never deletes a lock with another token.
 
 **Slice 3**
+- The first message creates one `conversations` row; the next one in the same thread reuses it.
+- A turn leaves a `user` message (status `answered`) and an `assistant` message with the reply.
+- A failed turn leaves the user message `failed` with the error text, and an assistant row holding the apology.
+- An expired item that was never logged gets its user row created and marked `expired`, plus an assistant row holding the apology.
+- The same item processed twice (a crash after the reply, before the pop) leaves one user row and one assistant row; the assistant row holds the latest reply and its Chat message name, and the user status is the latest outcome.
+- Redelivery never resets an `answered` user row back to `pending`.
+- If the first log write raises, the reply is still posted, the item is still popped, and the later writes still produce the conversation, the user row (created by `finish_user_message`) with its final status, and the assistant row.
+- If the last log write raises, the reply is still posted and the item is still popped.
+- The conversation `thread_id` is `gchat:{space}:{user}`, matching the checkpointer's.
+
+**Slice 4**
 - Reset command id → reset item enqueued.
 - Draining [msg, reset, msg] → reply, "Conversation cleared.", then the third turn sees no history.
 - Another (space, user) thread is untouched.
 - Command id 1 (`/add-knowledge`) → logs only.
 - `GOOGLE_CHAT_RESET_COMMAND_ID=0` → no command treated as reset.
 
-**Slice 4**
+**Slice 5**
 - The fake model calls `search_knowledge("x")`; the tool output reaches the next model call; the tool saw `space` from context.
 - The tool's schema has only `query`.
 
-**Slice 5**
+**Slice 6**
 - With a tiny token trigger in the test, history over the trigger → the summary model is called once, and the state's messages are the summary plus the last N.
 - Under the trigger → the summary model is not called.
 
@@ -356,3 +402,4 @@ The checkpointer's Postgres behaviour is LangGraph's own and is not re-tested; `
   5. DM the bot → "I only work in spaces".
   6. Set `LLM_API_KEY` to garbage and restart the worker → the apology is posted, and the next message after fixing the key works with clean history.
   7. Ask a knowledge question → the worker log shows the `search_knowledge` call.
+  8. In psql, `select * from conversations` and `select role, content, status from messages order by id` show the exchanges from steps 1 to 3 in order; after `/reset` the rows are still there. The garbage-key run in step 6 shows a `failed` user message with the error text.

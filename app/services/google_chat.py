@@ -3,12 +3,14 @@ from contextlib import asynccontextmanager
 
 import httpx
 
-from app.agent.state import ConversationContext
+from app.core.celery_app import dispatch
 from app.core.config import settings
 from app.core.google_chat_client import GoogleChatClient
 from app.core.logger import logger
+from app.core.trace import trace_id
 from app.schemas.google_chat import AppCommandPayload, ChatPayload, MessagePayload
-from app.services import conversation
+from app.services import conversation_queue
+from app.tasks import conversation as conversation_tasks
 
 ACK = "Got it"
 DM_REPLY = "I only work in spaces. Mention me in a space."
@@ -41,14 +43,14 @@ async def handle_event(chat: ChatPayload) -> None:
 
 
 @asynccontextmanager
-async def _open_chat_client() -> AsyncIterator[GoogleChatClient]:
+async def open_chat_client() -> AsyncIterator[GoogleChatClient]:
     # the worker has no app lifespan, so it opens its own client for the task
     async with httpx.AsyncClient(timeout=10) as http:
         yield GoogleChatClient(http, settings.google_chat_credentials_file)
 
 
 async def _handle_mention(payload: MessagePayload) -> None:
-    """Answer a mention in a space through the conversation agent."""
+    """Queue a mention for the conversation agent; DMs and empty mentions get a short reply."""
     msg = payload.message
     space = payload.space.name
     sender = msg.sender.email if msg.sender else None
@@ -57,34 +59,25 @@ async def _handle_mention(payload: MessagePayload) -> None:
     if msg.sender is None:  # no stable user id to key the conversation on
         return
 
-    async with _open_chat_client() as chat:
-        if payload.space.type == "DM":
-            await send_message(chat, space, DM_REPLY)
-        elif not text:
-            await send_message(chat, space, EMPTY_REPLY)
-        else:
-            ctx = ConversationContext(
-                space=space,
-                user=msg.sender.name,
-                display_name=msg.sender.display_name or msg.sender.name,
-            )
-            await _answer(chat, ctx, msg.name, text)
+    if payload.space.type == "DM" or not text:
+        async with open_chat_client() as chat:
+            await send_message(chat, space, DM_REPLY if payload.space.type == "DM" else EMPTY_REPLY)
+        return
 
-
-async def _answer(
-    chat: GoogleChatClient, ctx: ConversationContext, message: str, text: str
-) -> None:
-    try:
-        async with conversation.open_graph() as graph:
-            answer = await conversation.run_turn(graph, ctx, message, text)
-        await send_message(chat, ctx.space, answer)
-    except Exception as e:
-        # log the type and message only; never the request, which can carry credentials
-        logger.error(f"conversation turn failed space={ctx.space}: {type(e).__name__}: {e}")
-        try:
-            await send_message(chat, ctx.space, FAILURE_REPLY)
-        except Exception as e2:
-            logger.error(f"could not post the failure reply: {type(e2).__name__}: {e2}")
+    item = conversation_queue.QueueItem(
+        space=space,
+        user=msg.sender.name,
+        message_name=msg.name,
+        text=text,
+        display_name=msg.sender.display_name or msg.sender.name,
+        trace_id=trace_id.get(),
+    )
+    async with conversation_queue.open_redis() as redis:
+        queued = await conversation_queue.enqueue(redis, item)
+    # dispatch even for a duplicate event: the first delivery may have died before dispatching,
+    # and a drain with nothing to do (or one already running) is harmless
+    logger.info(f"conversation message queued={queued} space={space} message={msg.name}")
+    await dispatch(conversation_tasks.drain_conversation, space, item.user, item.trace_id)
 
 
 async def _handle_command(payload: AppCommandPayload) -> None:

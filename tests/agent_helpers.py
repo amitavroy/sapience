@@ -22,3 +22,35 @@ class FakeChatModel(BaseChatModel):
 
     def bind_tools(self, tools, **kwargs):
         return self
+
+
+class FakeChat:
+    """Stands in for GoogleChatClient: records what the app posted."""
+
+    def __init__(self) -> None:
+        self.sent: list[tuple[str, str]] = []
+
+    async def create_message(self, space: str, text: str) -> str:
+        self.sent.append((space, text))
+        return f"{space}/messages/1"
+
+
+class FakeRedis:
+    """The few Redis calls the enqueue path uses (set NX, rpush, delete), kept in memory."""
+
+    def __init__(self) -> None:
+        self.values: dict[str, str] = {}
+        self.lists: dict[str, list[str]] = {}
+
+    async def set(self, key, value, condition=None, ex=None):
+        if condition is not None and key in self.values:
+            return None
+        self.values[key] = value
+        return True
+
+    async def rpush(self, key, elements) -> int:
+        self.lists.setdefault(key, []).extend(elements)
+        return len(self.lists[key])
+
+    async def delete(self, keys) -> int:
+        return sum(self.values.pop(k, None) is not None for k in keys)

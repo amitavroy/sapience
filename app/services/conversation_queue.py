@@ -1,11 +1,13 @@
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from typing import Literal
 from uuid import uuid4
 
 from coredis import PureToken, Redis
 from pydantic import BaseModel, Field, ValidationError
 
+from app.core.config import settings
 from app.core.logger import logger
 
 LOCK_TTL = 900  # seconds; also the backstop that frees the lock after a crashed worker
@@ -36,6 +38,14 @@ class QueueItem(BaseModel):
     display_name: str = ""
     trace_id: str = ""
     enqueued_at: float = Field(default_factory=time.time)
+
+
+@asynccontextmanager
+async def open_redis() -> AsyncIterator[Redis]:
+    # coredis only works inside `async with` on the loop it was entered on, and every Celery
+    # task has its own loop, so the client is opened per use
+    async with Redis.from_url(settings.redis_url) as redis:
+        yield redis
 
 
 def queue_key(space: str, user: str) -> str:

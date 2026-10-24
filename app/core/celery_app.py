@@ -11,6 +11,7 @@ celery_app = Celery(
     include=[
         "app.tasks.user",
         "app.tasks.google_chat",
+        "app.tasks.conversation",
         "app.tasks.crawler",
         "app.tasks.embedding",
     ],

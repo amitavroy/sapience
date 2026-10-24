@@ -1,35 +1,29 @@
+import json
 from contextlib import asynccontextmanager
 
 import pytest
 
 from app.core.logger import logger
+from app.core.trace import trace_id as trace_var
 from app.schemas.google_chat import ChatPayload
-from app.services import conversation, google_chat
-from app.services.google_chat import DM_REPLY, EMPTY_REPLY, FAILURE_REPLY, handle_event
+from app.services import conversation_queue, google_chat
+from app.services.google_chat import DM_REPLY, EMPTY_REPLY, handle_event
 from app.tasks.google_chat import process_chat_event
+from tests.agent_helpers import FakeChat, FakeRedis
 from tests.google_chat_helpers import CHAT_FIXTURES, SLASH_FIXTURE, load_fixture
 
 SPACE, DM = CHAT_FIXTURES
-
-
-class FakeChat:
-    def __init__(self) -> None:
-        self.sent: list[tuple[str, str]] = []
-
-    async def create_message(self, space: str, text: str) -> str:
-        self.sent.append((space, text))
-        return f"{space}/messages/1"
+DRAIN_TASK = "app.tasks.conversation.drain_conversation"
 
 
 @pytest.fixture
-def turns() -> list[tuple]:
-    """(ctx, message_name, text) for every turn the fake graph ran."""
-    return []
+def redis() -> FakeRedis:
+    return FakeRedis()
 
 
 @pytest.fixture(autouse=True)
-def fake_chat(monkeypatch: pytest.MonkeyPatch, turns: list[tuple]) -> FakeChat:
-    """No test reaches Google or an LLM: the Chat client and the graph are fakes."""
+def fake_chat(monkeypatch: pytest.MonkeyPatch, redis: FakeRedis) -> FakeChat:
+    """No test reaches Google or Redis: the Chat client and the Redis client are fakes."""
     fake = FakeChat()
 
     @asynccontextmanager
@@ -37,16 +31,11 @@ def fake_chat(monkeypatch: pytest.MonkeyPatch, turns: list[tuple]) -> FakeChat:
         yield fake
 
     @asynccontextmanager
-    async def open_graph():
-        yield None
+    async def open_redis():
+        yield redis
 
-    async def run_turn(graph, ctx, message_name, text) -> str:
-        turns.append((ctx, message_name, text))
-        return "reply"
-
-    monkeypatch.setattr(google_chat, "_open_chat_client", open_chat_client)
-    monkeypatch.setattr(conversation, "open_graph", open_graph)
-    monkeypatch.setattr(conversation, "run_turn", run_turn)
+    monkeypatch.setattr(google_chat, "open_chat_client", open_chat_client)
+    monkeypatch.setattr(conversation_queue, "open_redis", open_redis)
     return fake
 
 
@@ -112,33 +101,59 @@ def test_task_runs_handle_event_under_the_request_trace_id(logs: list[dict]) -> 
     assert record["extra"] == {"trace_id": "trace1234", "job": "process_chat_event"}
 
 
-async def test_mention_in_a_space_runs_a_turn_and_posts_the_reply(
-    fake_chat: FakeChat, turns: list[tuple]
+def queued(redis: FakeRedis) -> list[dict]:
+    return [json.loads(raw) for items in redis.lists.values() for raw in items]
+
+
+async def test_mention_in_a_space_is_queued_and_a_drain_dispatched(
+    fake_chat: FakeChat, redis: FakeRedis, dispatched: list[tuple]
 ) -> None:
-    await handle_event(ChatPayload.model_validate(load_fixture(SPACE)["chat"]))
+    token = trace_var.set("trace-abc")
+    try:
+        await handle_event(ChatPayload.model_validate(load_fixture(SPACE)["chat"]))
+    finally:
+        trace_var.reset(token)
 
-    [(ctx, message_name, text)] = turns
-    assert (ctx.space, ctx.user, ctx.display_name) == (
-        "spaces/AAAAAAAAAAA",
-        "users/1001",
-        "Ann Example",
-    )
-    assert message_name == "spaces/AAAAAAAAAAA/messages/MSG1.MSG1"
-    assert text == "hi"
-    assert fake_chat.sent == [("spaces/AAAAAAAAAAA", "reply")]
+    [item] = queued(redis)
+    assert item | {"enqueued_at": 0} == {
+        "kind": "message",
+        "space": "spaces/AAAAAAAAAAA",
+        "user": "users/1001",
+        "message_name": "spaces/AAAAAAAAAAA/messages/MSG1.MSG1",
+        "text": "hi",
+        "display_name": "Ann Example",
+        "trace_id": "trace-abc",
+        "enqueued_at": 0,
+    }
+    assert dispatched == [(DRAIN_TASK, "spaces/AAAAAAAAAAA", "users/1001", "trace-abc")]
+    assert fake_chat.sent == []  # the reply comes from the drain, not the handler
 
 
-async def test_dm_gets_the_spaces_only_reply_and_no_turn(
-    fake_chat: FakeChat, turns: list[tuple]
+async def test_duplicate_event_is_queued_once_but_still_dispatches(
+    redis: FakeRedis, dispatched: list[tuple]
+) -> None:
+    chat = ChatPayload.model_validate(load_fixture(SPACE)["chat"])
+
+    await handle_event(chat)
+    await handle_event(chat)
+
+    assert len(queued(redis)) == 1
+    # the first delivery may have died before dispatching; an idle drain is harmless
+    assert len(dispatched) == 2
+
+
+async def test_dm_gets_the_spaces_only_reply_and_nothing_is_queued(
+    fake_chat: FakeChat, redis: FakeRedis, dispatched: list[tuple]
 ) -> None:
     await handle_event(ChatPayload.model_validate(load_fixture(DM)["chat"]))
 
     assert fake_chat.sent == [("spaces/BBBBBBBBBBB", DM_REPLY)]
-    assert turns == []
+    assert queued(redis) == []
+    assert dispatched == []
 
 
-async def test_mention_without_text_gets_a_hint_and_no_turn(
-    fake_chat: FakeChat, turns: list[tuple]
+async def test_mention_without_text_gets_a_hint_and_nothing_is_queued(
+    fake_chat: FakeChat, redis: FakeRedis, dispatched: list[tuple]
 ) -> None:
     chat = load_fixture(SPACE)["chat"]
     message = chat["messagePayload"]["message"]
@@ -148,44 +163,24 @@ async def test_mention_without_text_gets_a_hint_and_no_turn(
     await handle_event(ChatPayload.model_validate(chat))
 
     assert fake_chat.sent == [("spaces/AAAAAAAAAAA", EMPTY_REPLY)]
-    assert turns == []
+    assert queued(redis) == []
+    assert dispatched == []
 
 
-async def test_mention_without_sender_is_ignored(fake_chat: FakeChat, turns: list[tuple]) -> None:
+async def test_mention_without_sender_is_ignored(
+    fake_chat: FakeChat, redis: FakeRedis, dispatched: list[tuple]
+) -> None:
     chat = load_fixture(SPACE)["chat"]
     del chat["messagePayload"]["message"]["sender"]
 
     await handle_event(ChatPayload.model_validate(chat))
 
     assert fake_chat.sent == []
-    assert turns == []
+    assert queued(redis) == []
+    assert dispatched == []
 
 
-async def test_failed_turn_posts_the_apology(
-    monkeypatch: pytest.MonkeyPatch, fake_chat: FakeChat
-) -> None:
-    async def boom(graph, ctx, message_name, text) -> str:
-        raise RuntimeError("model down")
+def test_task_passes_its_trace_id_on_to_the_drain(dispatched: list[tuple]) -> None:
+    process_chat_event(load_fixture(SPACE)["chat"], "trace1234")
 
-    monkeypatch.setattr(conversation, "run_turn", boom)
-
-    await handle_event(ChatPayload.model_validate(load_fixture(SPACE)["chat"]))
-
-    assert fake_chat.sent == [("spaces/AAAAAAAAAAA", FAILURE_REPLY)]
-
-
-async def test_failed_apology_is_logged_not_raised(
-    monkeypatch: pytest.MonkeyPatch, fake_chat: FakeChat, logs: list[dict]
-) -> None:
-    async def boom(graph, ctx, message_name, text) -> str:
-        raise RuntimeError("model down")
-
-    async def chat_down(space: str, text: str) -> str:
-        raise RuntimeError("chat down")
-
-    monkeypatch.setattr(conversation, "run_turn", boom)
-    monkeypatch.setattr(fake_chat, "create_message", chat_down)
-
-    await handle_event(ChatPayload.model_validate(load_fixture(SPACE)["chat"]))
-
-    assert any("could not post the failure reply" in r["message"] for r in logs)
+    assert dispatched == [(DRAIN_TASK, "spaces/AAAAAAAAAAA", "users/1001", "trace1234")]

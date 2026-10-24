@@ -57,6 +57,7 @@ def dispatched(monkeypatch: pytest.MonkeyPatch) -> list[tuple]:
 
     monkeypatch.setattr("app.services.user.dispatch", fake_dispatch)
     monkeypatch.setattr("app.routers.ingest.dispatch", fake_dispatch)
+    monkeypatch.setattr("app.services.google_chat.dispatch", fake_dispatch)
     return calls
 
 
