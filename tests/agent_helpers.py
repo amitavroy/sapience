@@ -54,3 +54,25 @@ class FakeRedis:
 
     async def delete(self, keys) -> int:
         return sum(self.values.pop(k, None) is not None for k in keys)
+
+
+class FakeGraph:
+    """Just enough of a compiled graph for process_item when run_turn is faked out."""
+
+    def __init__(self, checkpoint: str | None = None) -> None:
+        self.checkpoint = checkpoint
+        self.checkpointer = self
+        self.deleted: list[str] = []
+        self.updates: list[tuple] = []
+
+    async def aget_state(self, config):
+        configurable = {"thread_id": config["configurable"]["thread_id"]}
+        if self.checkpoint:
+            configurable["checkpoint_id"] = self.checkpoint
+        return type("Snapshot", (), {"config": {"configurable": configurable}})()
+
+    async def adelete_thread(self, thread_id: str) -> None:
+        self.deleted.append(thread_id)
+
+    async def aupdate_state(self, config, values, as_node=None) -> None:
+        self.updates.append((config, values, as_node))

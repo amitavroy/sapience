@@ -1,15 +1,22 @@
-from collections.abc import AsyncIterator
+import asyncio
+import time
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from functools import partial
 
-from langchain_core.messages import HumanMessage
+import openai
+from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph.state import CompiledStateGraph
 
 from app.agent.checkpointer import open_checkpointer
 from app.agent.graph import build_graph
 from app.agent.state import ConversationContext
-from app.core.google_chat_client import GoogleChatClient
+from app.core.google_chat_client import (
+    GoogleChatClient,
+    GoogleChatError,
+    GoogleChatNotConfiguredError,
+)
 from app.core.logger import logger
 from app.services import conversation_queue
 from app.services import google_chat as google_chat_service
@@ -17,6 +24,8 @@ from app.services.conversation_queue import QueueItem
 
 # caps the model <-> tools loop within one turn
 RECURSION_LIMIT = 12
+RETRY_DELAYS = (5, 15, 60)  # seconds before retries 1, 2 and 3
+MESSAGE_TTL = 900  # a message older than this when it reaches the head is dropped
 
 
 def thread_id(space: str, user: str) -> str:
@@ -30,19 +39,114 @@ async def open_graph() -> AsyncIterator[CompiledStateGraph]:
         yield build_graph(checkpointer)
 
 
+def _config(ctx: ConversationContext, checkpoint_id: str | None = None) -> RunnableConfig:
+    configurable = {"thread_id": thread_id(ctx.space, ctx.user)}
+    if checkpoint_id:
+        configurable["checkpoint_id"] = checkpoint_id
+    return {"configurable": configurable, "recursion_limit": RECURSION_LIMIT}
+
+
+async def current_checkpoint(graph: CompiledStateGraph, ctx: ConversationContext) -> str | None:
+    """The thread's latest checkpoint id, or None for a thread with no history yet."""
+    state = await graph.aget_state(_config(ctx))
+    return state.config["configurable"].get("checkpoint_id")
+
+
 async def run_turn(
-    graph: CompiledStateGraph, ctx: ConversationContext, message_name: str, text: str
+    graph: CompiledStateGraph,
+    ctx: ConversationContext,
+    message_name: str,
+    text: str,
+    from_checkpoint: str | None = None,
 ) -> str:
-    """Run one user message through the graph and return the reply text."""
-    config: RunnableConfig = {
-        "configurable": {"thread_id": thread_id(ctx.space, ctx.user)},
-        "recursion_limit": RECURSION_LIMIT,
-    }
+    """Run one user message through the graph and return the reply text.
+
+    `from_checkpoint` starts the turn from that checkpoint, which forks a new branch that then
+    becomes the thread's latest. Retries use it to leave a half-finished attempt behind.
+    """
     # the Chat message name as id keeps the human message from being duplicated if re-applied
     state = await graph.ainvoke(
-        {"messages": [HumanMessage(text, id=message_name)]}, config, context=ctx
+        {"messages": [HumanMessage(text, id=message_name)]},
+        _config(ctx, from_checkpoint),
+        context=ctx,
     )
     return state["reply"]
+
+
+async def record_failure(
+    graph: CompiledStateGraph,
+    ctx: ConversationContext,
+    message_name: str,
+    text: str,
+    from_checkpoint: str | None,
+) -> None:
+    """Leave the thread as the user saw it: their message and the apology, no half turn."""
+    if from_checkpoint is None:  # the thread held nothing before this turn
+        await graph.checkpointer.adelete_thread(thread_id(ctx.space, ctx.user))
+    reply = google_chat_service.FAILURE_REPLY
+    await graph.aupdate_state(
+        _config(ctx, from_checkpoint),
+        {"messages": [HumanMessage(text, id=message_name), AIMessage(reply)], "reply": reply},
+        as_node="finalize",
+    )
+
+
+class MessageExpiredError(Exception):
+    pass
+
+
+def is_retryable(error: Exception) -> bool:
+    # APITimeoutError is an APIConnectionError
+    if isinstance(error, openai.APIConnectionError | openai.RateLimitError):
+        return True
+    if isinstance(error, openai.InternalServerError):
+        return True
+    if isinstance(error, GoogleChatNotConfiguredError):  # no status, but retrying cannot help
+        return False
+    return isinstance(error, GoogleChatError) and (error.status is None or error.status >= 500)
+
+
+async def _with_retries[T](call: Callable[[], Awaitable[T]], what: str, space: str) -> T:
+    """Retry in place, so the next queued message cannot overtake this one."""
+    for delay in RETRY_DELAYS:
+        try:
+            return await call()
+        except Exception as e:
+            if not is_retryable(e):
+                raise
+            logger.warning(f"{what} failed, retrying in {delay}s space={space}: {_describe(e)}")
+            await asyncio.sleep(delay)
+    return await call()
+
+
+def _describe(error: Exception) -> str:
+    # the type and message only; never the request, which can carry credentials
+    return f"{type(error).__name__}: {error}"
+
+
+async def _answer(
+    graph: CompiledStateGraph,
+    chat: GoogleChatClient,
+    ctx: ConversationContext,
+    item: QueueItem,
+    from_checkpoint: str | None,
+) -> None:
+    age = time.time() - item.enqueued_at
+    if age > MESSAGE_TTL:
+        raise MessageExpiredError(f"waited {int(age)}s in the queue")
+
+    async def turn() -> str:
+        if from_checkpoint is None:  # nothing to fork from, so clear what a failed attempt left
+            await graph.checkpointer.adelete_thread(thread_id(ctx.space, ctx.user))
+        return await run_turn(graph, ctx, item.message_name, item.text, from_checkpoint)
+
+    answer = await _with_retries(turn, "conversation turn", item.space)
+    # posting is retried on its own, so a Chat outage does not re-run the model
+    await _with_retries(
+        lambda: google_chat_service.send_message(chat, item.space, answer),
+        "reply post",
+        item.space,
+    )
 
 
 async def process_item(chat: GoogleChatClient, item: QueueItem) -> None:
@@ -55,17 +159,23 @@ async def process_item(chat: GoogleChatClient, item: QueueItem) -> None:
         # the graph is opened here, not once per drain: a missing LLM key or an unreachable
         # database must end in the apology, and an idle drain should not open a connection
         async with open_graph() as graph:
-            answer = await run_turn(graph, ctx, item.message_name, item.text)
-        await google_chat_service.send_message(chat, item.space, answer)
+            from_checkpoint = await current_checkpoint(graph, ctx)
+            try:
+                await _answer(graph, chat, ctx, item, from_checkpoint)
+            except Exception:
+                try:
+                    await record_failure(graph, ctx, item.message_name, item.text, from_checkpoint)
+                except Exception as e:
+                    logger.error(f"could not record the failed turn: {_describe(e)}")
+                raise
     except Exception as e:
-        # log the type and message only; never the request, which can carry credentials
-        logger.error(f"conversation turn failed space={item.space}: {type(e).__name__}: {e}")
+        logger.error(f"conversation turn failed space={item.space}: {_describe(e)}")
         try:
             await google_chat_service.send_message(
                 chat, item.space, google_chat_service.FAILURE_REPLY
             )
         except Exception as e2:
-            logger.error(f"could not post the failure reply: {type(e2).__name__}: {e2}")
+            logger.error(f"could not post the failure reply: {_describe(e2)}")
 
 
 async def drain(space: str, user: str) -> None:

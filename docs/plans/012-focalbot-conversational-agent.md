@@ -17,7 +17,7 @@ Each slice ends in a working, reviewable state with passing tests. Pause for rev
 | 1 | Bot answers with memory | Manual: @FocalBot in a space, follow-up question uses earlier context; second user gets a fresh conversation | [x] |
 | 2 | FIFO per conversation | `app/services/conversation_queue.py`: Redis list + lock + dedup keys; `enqueue`, `drain` | [x] |
 | 2 | FIFO per conversation | `app/tasks/conversation.py`: `drain_conversation(space, user, trace_id)` task; `_handle_mention` enqueues + dispatches instead of running inline | [x] |
-| 2 | FIFO per conversation | In-drain retries (5 s, 15 s, 60 s), 15 min message expiry, fork-from-pre-turn-checkpoint on retry, clean "sorry" checkpoint on final failure | [ ] |
+| 2 | FIFO per conversation | In-drain retries (5 s, 15 s, 60 s), 15 min message expiry, fork-from-pre-turn-checkpoint on retry, clean "sorry" checkpoint on final failure | [x] |
 | 2 | FIFO per conversation | Tests (fake Redis): order kept; second drain exits while locked; nothing stranded after release; duplicate message name ignored; retry then success; final failure posts sorry and continues; expired message dropped; retry doesn't duplicate history | [ ] |
 | 2 | FIFO per conversation | Manual: send 3 quick mentions; replies arrive in order, each referencing the previous | [ ] |
 | 3 | Conversation log | `app/models/conversation.py`: `Conversation`, `Message`; import both in `app/models/__init__.py`; Alembic migration | [ ] |

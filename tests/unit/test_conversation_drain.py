@@ -10,7 +10,7 @@ from app.services import conversation, conversation_queue
 from app.services.conversation_queue import QueueItem
 from app.services.google_chat import FAILURE_REPLY
 from app.tasks import conversation as conversation_task
-from tests.agent_helpers import FakeChat
+from tests.agent_helpers import FakeChat, FakeGraph
 
 ITEM = QueueItem(
     space="spaces/A",
@@ -33,7 +33,7 @@ def logs() -> list[dict]:
 def fake_graph(monkeypatch: pytest.MonkeyPatch) -> None:
     @asynccontextmanager
     async def open_graph():
-        yield None
+        yield FakeGraph()
 
     monkeypatch.setattr(conversation, "open_graph", open_graph)
 
@@ -43,7 +43,9 @@ def turns(monkeypatch: pytest.MonkeyPatch) -> list[tuple]:
     """(ctx, message_name, text) for every turn the fake graph ran."""
     calls: list[tuple] = []
 
-    async def run_turn(graph, ctx: ConversationContext, message_name: str, text: str) -> str:
+    async def run_turn(
+        graph, ctx: ConversationContext, message_name: str, text: str, from_checkpoint=None
+    ) -> str:
         calls.append((ctx, message_name, text))
         return "reply"
 
@@ -63,7 +65,7 @@ async def test_message_item_runs_a_turn_and_posts_the_reply(turns: list[tuple]) 
 
 
 async def test_failed_turn_posts_the_apology(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def boom(graph, ctx, message_name, text) -> str:
+    async def boom(graph, ctx, message_name, text, from_checkpoint=None) -> str:
         raise RuntimeError("model down")
 
     monkeypatch.setattr(conversation, "run_turn", boom)
@@ -77,7 +79,7 @@ async def test_failed_turn_posts_the_apology(monkeypatch: pytest.MonkeyPatch) ->
 async def test_failed_apology_is_logged_not_raised(
     monkeypatch: pytest.MonkeyPatch, logs: list[dict]
 ) -> None:
-    async def boom(graph, ctx, message_name, text) -> str:
+    async def boom(graph, ctx, message_name, text, from_checkpoint=None) -> str:
         raise RuntimeError("model down")
 
     monkeypatch.setattr(conversation, "run_turn", boom)
