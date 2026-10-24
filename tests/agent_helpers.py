@@ -36,7 +36,7 @@ class FakeChat:
 
 
 class FakeRedis:
-    """The few Redis calls the enqueue path uses (set NX, rpush, delete), kept in memory."""
+    """The Redis calls the chat queue uses, kept in memory (no TTLs: nothing here waits)."""
 
     def __init__(self) -> None:
         self.values: dict[str, str] = {}
@@ -52,8 +52,25 @@ class FakeRedis:
         self.lists.setdefault(key, []).extend(elements)
         return len(self.lists[key])
 
+    async def lindex(self, key, index):
+        items = self.lists.get(key, [])
+        return items[index] if items else None
+
+    async def llen(self, key) -> int:
+        return len(self.lists.get(key, []))
+
     async def delete(self, keys) -> int:
         return sum(self.values.pop(k, None) is not None for k in keys)
+
+    async def eval(self, script, keys, args):
+        """Runs the three token-guarded scripts of conversation_queue by what they do."""
+        if self.values.get(keys[0]) != args[0]:
+            return 0
+        if "'lpop'" in script:
+            self.lists[keys[1]].pop(0)
+        elif "'del'" in script:
+            del self.values[keys[0]]
+        return 1
 
 
 class FakeGraph:
