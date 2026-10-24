@@ -180,6 +180,39 @@ async def test_mention_without_sender_is_ignored(
     assert dispatched == []
 
 
+async def test_reset_command_is_queued_and_a_drain_dispatched(
+    monkeypatch: pytest.MonkeyPatch, redis: FakeRedis, dispatched: list[tuple]
+) -> None:
+    monkeypatch.setattr(google_chat.settings, "google_chat_reset_command_id", 1)
+
+    await handle_event(ChatPayload.model_validate(load_fixture(SLASH_FIXTURE)["chat"]))
+
+    [item] = queued(redis)
+    assert (item["kind"], item["space"], item["user"]) == (
+        "reset",
+        "spaces/1234567890",
+        "users/1234567890",
+    )
+    assert len(dispatched) == 1
+    assert dispatched[0][:3] == (DRAIN_TASK, "spaces/1234567890", "users/1234567890")
+
+
+@pytest.mark.parametrize("reset_id", [0, 2], ids=["not-configured", "other-id"])
+async def test_other_command_ids_are_only_logged(
+    monkeypatch: pytest.MonkeyPatch,
+    redis: FakeRedis,
+    dispatched: list[tuple],
+    reset_id: int,
+) -> None:
+    # the fixture's command id is 1; with 0 nothing is a reset, with 2 only id 2 is
+    monkeypatch.setattr(google_chat.settings, "google_chat_reset_command_id", reset_id)
+
+    await handle_event(ChatPayload.model_validate(load_fixture(SLASH_FIXTURE)["chat"]))
+
+    assert queued(redis) == []
+    assert dispatched == []
+
+
 def test_task_passes_its_trace_id_on_to_the_drain(dispatched: list[tuple]) -> None:
     process_chat_event(load_fixture(SPACE)["chat"], "trace1234")
 
