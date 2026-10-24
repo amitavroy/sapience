@@ -93,3 +93,13 @@ class FakeGraph:
 
     async def aupdate_state(self, config, values, as_node=None) -> None:
         self.updates.append((config, values, as_node))
+
+
+class NullLog:
+    """A ConversationLog that records nothing, for tests that are not about the log."""
+
+    async def record_user_message(self, key, message_name, text) -> None: ...
+
+    async def record_reply(self, key, message_name, text, chat_message_name) -> None: ...
+
+    async def finish_user_message(self, key, message_name, text, status, error) -> None: ...

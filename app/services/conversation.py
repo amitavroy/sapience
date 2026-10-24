@@ -18,8 +18,10 @@ from app.core.google_chat_client import (
     GoogleChatNotConfiguredError,
 )
 from app.core.logger import logger
+from app.models.conversation import MessageStatus
 from app.services import conversation_queue
 from app.services import google_chat as google_chat_service
+from app.services.conversation_log import ConversationKey, ConversationLog
 from app.services.conversation_queue import QueueItem
 
 # caps the model <-> tools loop within one turn
@@ -130,7 +132,8 @@ async def _answer(
     ctx: ConversationContext,
     item: QueueItem,
     from_checkpoint: str | None,
-) -> None:
+) -> tuple[str, str]:
+    """Run the turn and post the reply; returns the reply text and the Chat message it became."""
     age = time.time() - item.enqueued_at
     if age > MESSAGE_TTL:
         raise MessageExpiredError(f"waited {int(age)}s in the queue")
@@ -142,46 +145,78 @@ async def _answer(
 
     answer = await _with_retries(turn, "conversation turn", item.space)
     # posting is retried on its own, so a Chat outage does not re-run the model
-    await _with_retries(
+    chat_message_name = await _with_retries(
         lambda: google_chat_service.send_message(chat, item.space, answer),
         "reply post",
         item.space,
     )
+    return answer, chat_message_name
 
 
-async def process_item(chat: GoogleChatClient, item: QueueItem) -> None:
+async def _logged(what: str, write: Awaitable[None]) -> None:
+    """The log is a record, not part of the answer: a failed write is reported and skipped."""
+    try:
+        await write
+    except Exception as e:
+        logger.error(f"conversation log {what} failed: {_describe(e)}")
+
+
+async def process_item(chat: GoogleChatClient, log: ConversationLog, item: QueueItem) -> None:
     """Handle one queued item; never raises, so the drain can always pop it."""
     if item.kind != "message":
         logger.warning(f"unsupported queue item kind={item.kind} space={item.space}")
         return
     ctx = ConversationContext(space=item.space, user=item.user, display_name=item.display_name)
+    key = ConversationKey(
+        channel="google_chat",
+        thread_id=thread_id(item.space, item.user),
+        space=item.space,
+        external_user=item.user,
+        display_name=item.display_name,
+    )
+    await _logged("user message", log.record_user_message(key, item.message_name, item.text))
     try:
         # the graph is opened here, not once per drain: a missing LLM key or an unreachable
         # database must end in the apology, and an idle drain should not open a connection
         async with open_graph() as graph:
             from_checkpoint = await current_checkpoint(graph, ctx)
             try:
-                await _answer(graph, chat, ctx, item, from_checkpoint)
+                reply, chat_message_name = await _answer(graph, chat, ctx, item, from_checkpoint)
             except Exception:
                 try:
                     await record_failure(graph, ctx, item.message_name, item.text, from_checkpoint)
                 except Exception as e:
                     logger.error(f"could not record the failed turn: {_describe(e)}")
                 raise
+        await _logged("reply", log.record_reply(key, item.message_name, reply, chat_message_name))
+        await _logged(
+            "outcome",
+            log.finish_user_message(
+                key, item.message_name, item.text, MessageStatus.ANSWERED, None
+            ),
+        )
     except Exception as e:
         logger.error(f"conversation turn failed space={item.space}: {_describe(e)}")
+        apology = google_chat_service.FAILURE_REPLY
+        apology_name: str | None = None
         try:
-            await google_chat_service.send_message(
-                chat, item.space, google_chat_service.FAILURE_REPLY
-            )
+            apology_name = await google_chat_service.send_message(chat, item.space, apology)
         except Exception as e2:
             logger.error(f"could not post the failure reply: {_describe(e2)}")
+        status = (
+            MessageStatus.EXPIRED if isinstance(e, MessageExpiredError) else MessageStatus.FAILED
+        )
+        await _logged("apology", log.record_reply(key, item.message_name, apology, apology_name))
+        await _logged(
+            "outcome",
+            log.finish_user_message(key, item.message_name, item.text, status, _describe(e)),
+        )
 
 
-async def drain(space: str, user: str) -> None:
+async def drain(space: str, user: str, log: ConversationLog) -> None:
     """Worker entry: run this conversation's queued items, opening the per-task resources."""
     async with (
         conversation_queue.open_redis() as redis,
         google_chat_service.open_chat_client() as chat,
     ):
-        await conversation_queue.drain(redis, space, user, partial(process_item, chat))
+        await conversation_queue.drain(redis, space, user, partial(process_item, chat, log))

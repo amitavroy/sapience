@@ -14,7 +14,7 @@ from app.core.google_chat_client import GoogleChatError
 from app.services import conversation, conversation_queue
 from app.services.conversation_queue import QueueItem, drain, enqueue, lock_key, queue_key
 from app.services.google_chat import FAILURE_REPLY
-from tests.agent_helpers import FakeChat, FakeChatModel, FakeRedis
+from tests.agent_helpers import FakeChat, FakeChatModel, FakeRedis, NullLog
 
 SPACE, USER = "spaces/A", "users/1"
 CTX = ConversationContext(space=SPACE, user=USER, display_name="Ann")
@@ -161,7 +161,7 @@ async def test_retryable_error_then_success_leaves_one_turn_in_history(
     graph = use_model(FlakyModel(replies=["fine"], failures=2))
     chat = FakeChat()
 
-    await conversation.process_item(chat, item(1))
+    await conversation.process_item(chat, NullLog(), item(1))
 
     assert chat.sent == [(SPACE, "fine")]
     assert slept == [5, 15]
@@ -175,13 +175,13 @@ async def test_final_failure_posts_the_apology_and_the_next_item_runs_clean(
     graph = use_model(model)
     chat = FakeChat()
 
-    await conversation.process_item(chat, item(1))
+    await conversation.process_item(chat, NullLog(), item(1))
 
     assert slept == [5, 15, 60]
     assert chat.sent == [(SPACE, FAILURE_REPLY)]
     assert await checkpointed(graph) == [("HumanMessage", "m1"), ("AIMessage", FAILURE_REPLY)]
 
-    await conversation.process_item(chat, item(2))
+    await conversation.process_item(chat, NullLog(), item(2))
 
     assert chat.sent[-1] == (SPACE, "second answer")
     seen = [m.text for m in model.calls[-1] if isinstance(m, HumanMessage | AIMessage)]
@@ -197,7 +197,7 @@ async def test_failure_does_not_stop_the_drain(
         await enqueue(redis, item(n))
 
     async def process(it: QueueItem) -> None:
-        await conversation.process_item(chat, it)
+        await conversation.process_item(chat, NullLog(), it)
 
     await drain(redis, SPACE, USER, process)
 
@@ -211,7 +211,7 @@ async def test_non_retryable_error_is_not_retried(use_model, slept: list[float])
     use_model(model)
     chat = FakeChat()
 
-    await conversation.process_item(chat, item(1))
+    await conversation.process_item(chat, NullLog(), item(1))
 
     assert model.attempts == 1
     assert slept == []
@@ -226,7 +226,7 @@ async def test_expired_item_gets_the_apology_without_a_model_call(
     chat = FakeChat()
     stale = item(1, enqueued_at=conversation.time.time() - conversation.MESSAGE_TTL - 1)
 
-    await conversation.process_item(chat, stale)
+    await conversation.process_item(chat, NullLog(), stale)
 
     assert model.calls == []
     assert chat.sent == [(SPACE, FAILURE_REPLY)]

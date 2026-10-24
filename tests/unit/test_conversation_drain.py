@@ -10,7 +10,7 @@ from app.services import conversation, conversation_queue
 from app.services.conversation_queue import QueueItem
 from app.services.google_chat import FAILURE_REPLY
 from app.tasks import conversation as conversation_task
-from tests.agent_helpers import FakeChat, FakeGraph
+from tests.agent_helpers import FakeChat, FakeGraph, NullLog
 
 ITEM = QueueItem(
     space="spaces/A",
@@ -56,7 +56,7 @@ def turns(monkeypatch: pytest.MonkeyPatch) -> list[tuple]:
 async def test_message_item_runs_a_turn_and_posts_the_reply(turns: list[tuple]) -> None:
     chat = FakeChat()
 
-    await conversation.process_item(chat, ITEM)
+    await conversation.process_item(chat, NullLog(), ITEM)
 
     [(ctx, message_name, text)] = turns
     assert (ctx.space, ctx.user, ctx.display_name) == ("spaces/A", "users/1", "Ann")
@@ -71,7 +71,7 @@ async def test_failed_turn_posts_the_apology(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(conversation, "run_turn", boom)
     chat = FakeChat()
 
-    await conversation.process_item(chat, ITEM)
+    await conversation.process_item(chat, NullLog(), ITEM)
 
     assert chat.sent == [("spaces/A", FAILURE_REPLY)]
 
@@ -90,7 +90,7 @@ async def test_failed_apology_is_logged_not_raised(
 
     monkeypatch.setattr(chat, "create_message", chat_down)
 
-    await conversation.process_item(chat, ITEM)
+    await conversation.process_item(chat, NullLog(), ITEM)
 
     assert chat.sent == []
     assert any("could not post the failure reply" in r["message"] for r in logs)
@@ -101,7 +101,7 @@ async def test_unsupported_item_kind_is_skipped_with_a_warning(
 ) -> None:
     chat = FakeChat()
 
-    await conversation.process_item(chat, ITEM.model_copy(update={"kind": "reset"}))
+    await conversation.process_item(chat, NullLog(), ITEM.model_copy(update={"kind": "reset"}))
 
     assert turns == []
     assert chat.sent == []
@@ -120,7 +120,7 @@ async def test_graph_that_cannot_be_opened_still_gets_the_apology(
     monkeypatch.setattr(conversation, "open_graph", broken_graph)
     chat = FakeChat()
 
-    await conversation.process_item(chat, ITEM)
+    await conversation.process_item(chat, NullLog(), ITEM)
 
     assert chat.sent == [("spaces/A", FAILURE_REPLY)]
 
@@ -146,7 +146,7 @@ async def test_drain_runs_the_queued_items_through_process_item(
     monkeypatch.setattr(conversation.google_chat_service, "open_chat_client", open_chat_client)
     monkeypatch.setattr(conversation_queue, "drain", queue_drain)
 
-    await conversation.drain("spaces/A", "users/1")
+    await conversation.drain("spaces/A", "users/1", NullLog())
 
     assert drained == [("redis", "spaces/A", "users/1")]
     assert chat.sent == [("spaces/A", "reply")]
@@ -155,7 +155,7 @@ async def test_drain_runs_the_queued_items_through_process_item(
 def test_task_drains_under_its_trace_id_and_resets_it(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[tuple] = []
 
-    async def fake_drain(space: str, user: str) -> None:
+    async def fake_drain(space: str, user: str, log) -> None:
         seen.append((space, user, trace_var.get()))
 
     monkeypatch.setattr(conversation_task.conversation_service, "drain", fake_drain)
@@ -168,7 +168,7 @@ def test_task_drains_under_its_trace_id_and_resets_it(monkeypatch: pytest.Monkey
 
 
 def test_task_resets_the_trace_id_when_the_drain_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def failing_drain(space: str, user: str) -> None:
+    async def failing_drain(space: str, user: str, log) -> None:
         raise RuntimeError("redis down")
 
     monkeypatch.setattr(conversation_task.conversation_service, "drain", failing_drain)
