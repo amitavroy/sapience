@@ -6,7 +6,13 @@ from langchain_openai import ChatOpenAI
 
 from app.core.config import settings
 
-Role = Literal["chat", "summary"]
+Role = Literal["chat", "summary", "classify"]
+
+# Roles with their own model setting; empty falls back to the chat model.
+_ROLE_MODEL = {
+    "summary": lambda: settings.llm_summary_model,
+    "classify": lambda: settings.llm_classify_model,
+}
 
 
 class ConversationError(Exception):
@@ -14,8 +20,7 @@ class ConversationError(Exception):
 
 
 def get_model(role: Role) -> BaseChatModel:
-    model = settings.llm_summary_model if role == "summary" else ""
-    model = model or settings.llm_chat_model
+    model = _ROLE_MODEL.get(role, lambda: "")() or settings.llm_chat_model
     if not settings.llm_api_key or not model:
         raise ConversationError("LLM_API_KEY / LLM_CHAT_MODEL are not set")
     return ChatOpenAI(

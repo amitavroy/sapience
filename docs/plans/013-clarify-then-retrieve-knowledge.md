@@ -6,7 +6,7 @@ Each slice ends in a working, reviewable state with passing tests. Pause for rev
 
 | # | Slice | Step | Done |
 |---|-------|------|------|
-| 1 | Answers from the knowledge base | `app/core/config.py` + `.env.example`: `LLM_CLASSIFY_MODEL`; `app/agent/models.py`: `classify` role (Decision 12) | [ ] |
+| 1 | Answers from the knowledge base | `app/core/config.py` + `.env.example`: `LLM_CLASSIFY_MODEL`; `app/agent/models.py`: `classify` role (Decision 12) | [x] |
 | 1 | Answers from the knowledge base | `QueueItem.email` and `ConversationContext.email` from `sender.email` (Decision 4) | [ ] |
 | 1 | Answers from the knowledge base | `app/services/retrieval.py`: `RetrievedChunk`, `probe(db, email, vectors, k)` as one `UNION ALL` query, `deep_search(db, email, vector, doc_ids, k)`, membership by email in the same query; the `KnowledgeSearch` protocol (Decisions 4, 5, 6) | [ ] |
 | 1 | Answers from the knowledge base | `app/tasks/conversation.py`: `TaskKnowledgeSearch` (embeds, then opens `task_session()` per search); passed to the graph through `ConversationContext.search` (Decision 7) | [ ] |

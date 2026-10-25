@@ -96,6 +96,27 @@ def test_get_model_without_key_or_model_raises(
         get_model("chat")
 
 
+@pytest.mark.parametrize(
+    ("role", "summary", "classify", "expected"),
+    [
+        ("chat", "s", "c", "m"),
+        ("summary", "s", "", "s"),
+        ("summary", "", "", "m"),
+        ("classify", "", "c", "c"),
+        ("classify", "", "", "m"),
+    ],
+)
+def test_get_model_picks_the_role_model_or_falls_back_to_chat(
+    monkeypatch: pytest.MonkeyPatch, role: str, summary: str, classify: str, expected: str
+) -> None:
+    monkeypatch.setattr(settings, "llm_api_key", "k")
+    monkeypatch.setattr(settings, "llm_chat_model", "m")
+    monkeypatch.setattr(settings, "llm_summary_model", summary)
+    monkeypatch.setattr(settings, "llm_classify_model", classify)
+
+    assert get_model(role).model_name == expected
+
+
 def test_each_model_gets_its_own_http_client(monkeypatch: pytest.MonkeyPatch) -> None:
     # a shared client stays bound to the first task's event loop ("Event loop is closed")
     monkeypatch.setattr(settings, "llm_api_key", "k")

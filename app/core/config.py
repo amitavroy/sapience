@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     llm_api_key: str = ""  # empty = every turn fails with a clear error
     llm_chat_model: str = ""  # provider-specific model id for replies; empty = turns fail
     llm_summary_model: str = ""  # empty = same as llm_chat_model
+    # yes/no and pick-one decisions (structured output only); empty = same as llm_chat_model
+    llm_classify_model: str = ""
     llm_timeout_seconds: float = 60  # per LLM call
     # dev-only defaults for `cli seed-user`
     seed_user_name: str = "Admin"
