@@ -27,7 +27,10 @@ Each slice ends in a working, reviewable state with passing tests. Pause for rev
 | 3 | Conversation log | Manual: send two mentions, then `select` from `conversations` and `messages` in psql and read both exchanges; force a failure and see `failed` | [x] |
 | 4 | /reset | `GOOGLE_CHAT_RESET_COMMAND_ID` setting; `_handle_command` routes that id to `enqueue(kind="reset")`; drain deletes the thread and posts "Conversation cleared" | [x] |
 | 4 | /reset | Tests: reset after messages clears only that (space, user); other user/space intact; queued-before-reset messages answered first; unknown command id still just logs | [x] |
-| 4 | /reset | Manual: register `/reset` in the Chat console, run it, follow-up has no memory | [ ] |
+| 4 | /reset | `conversation_log.clear_messages(db, key)` (+ `ConversationLog` protocol, `TaskConversationLog`): delete the messages of the conversation owned by `key`; the conversation row stays; ownership is checked in the query (Decision 20) | [ ] |
+| 4 | /reset | `_process_reset`: clear the checkpointer thread, clear the messages, post "Conversation cleared.", then record that reply as the one remaining assistant message; a failed clear (either store) posts the apology and does not claim "cleared"; `_process_reset` gains the `log` argument; `clear_messages` is called outside `_logged`, recording the reply inside it | [ ] |
+| 4 | /reset | Tests: reset deletes the owner's messages and checkpoint and leaves one assistant row "Conversation cleared."; only the owner's data goes (other user, same user in another space, same thread id with another `external_user`); the reset item has no field naming another user or conversation; reset before any conversation exists clears nothing, still posts and records; a failed clear posts the apology, writes no user row, and the next `/reset` succeeds; a retried reset does not duplicate the reply row | [ ] |
+| 4 | /reset | Manual: register `/reset` in the Chat console, run it, follow-up has no memory; `messages` holds only "Conversation cleared." for that conversation, the conversation row remains | [ ] |
 | 5 | Knowledge tool | `app/agent/tools/knowledge.py`: `search_knowledge(query)` returns a fixed string; space read from runtime context; wired into the agent | [ ] |
 | 5 | Knowledge tool | Tests: scripted tool call → tool runs with the space from context → answer uses its output; tool not exposed a `space` argument | [ ] |
 | 6 | Summarization | `SummarizationMiddleware(model=get_model("summary"), trigger=("tokens", 8000), keep=("messages", 20))` on the agent | [ ] |
@@ -105,8 +108,8 @@ Decisions settled in the design discussion:
     - The `HumanMessage` id is the Chat message name, so `add_messages` replaces instead of duplicating if it is ever re-applied.
 12. **Reply delivery.** After a successful turn, the drain posts `state["reply"]` with `google_chat.send_message` (GH-6) to the space, then pops. Posting is part of "processing", so a Chat 5xx retries the post. To avoid a second LLM call, the reply is posted from the stored state rather than by re-running the graph. The retry loop wraps "run turn" and "post" separately.
 13. **`/reset` goes through the queue.** `GOOGLE_CHAT_RESET_COMMAND_ID` (int; 0 = not configured) is matched against `app_command_metadata.app_command_id` (route on the ID, as planned in 006).
-    - The command enqueues `{kind: "reset"}` for (space, sender) and dispatches the drain.
-    - The drain runs `checkpointer.adelete_thread(thread_id)` and posts "Conversation cleared."
+    - The command enqueues `{kind: "reset", message_name, display_name, ...}` for (space, sender) and dispatches the drain.
+    - The drain runs `checkpointer.adelete_thread(thread_id)`, deletes the conversation's rows in `messages` (Decision 19, Decision 20), posts "Conversation cleared." and records that reply as the single remaining assistant message.
     - Going through the FIFO avoids racing a turn that is mid-run. Messages sent before `/reset` are answered first, then cleared, which matches the order the user typed them.
     - Other command ids (`/add-knowledge`) keep logging as today.
 14. **Stub knowledge tool, real interface.** `search_knowledge(query: str) -> str` returns a fixed string ("No knowledge base is connected yet."). It reads the space from runtime context (`ToolRuntime[ConversationContext]`), so the LLM never chooses whose knowledge to search. This matches "a collection will be a space": real RAG later swaps the body for a vector search filtered by the space's collection.
@@ -135,11 +138,18 @@ Decisions settled in the design discussion:
     - **API.** Every function takes a `ConversationKey` (a frozen dataclass in `conversation_log.py`: `channel`, `thread_id`, `space`, `external_user`, `display_name`; `process_item` builds it from the queue item with `channel="google_chat"`, `thread_id(space, user)`, and the item's `display_name`) and finds or creates the conversation itself, in the same session and transaction as its write. There is no separate "get or create" step for the caller, and no write depends on an earlier one having succeeded.
     - **Write order.** Before the turn: `record_user_message(db, key, message_name, text)` inserts the user row as `pending`. After it: `record_reply(db, key, message_name, text, chat_message_name)` writes the assistant row (the reply, or the apology on failure or expiry), and `finish_user_message(db, key, message_name, text, status, error)` sets the user row to `answered`, `failed` (with the error type and message) or `expired`. `finish_user_message` is an upsert: if the first write failed, or the item expired before it was ever logged, it creates the user row (from `text`) and then sets the status, so the outcome is never lost. An expired item gets the same treatment, with the apology as the assistant row.
     - **Redelivery (peek-then-pop, Decision 9).** `record_user_message` is insert-if-absent and never resets an existing status to `pending`. `finish_user_message` is the only writer of `status`, and the latest outcome wins, because it is what the user last saw. `record_reply` keys the assistant row on `{message_name}#reply`, so a rerun updates that row's content and `chat_message_name` instead of adding a second reply row. The Chat message name of a rerun's reply differs, which is why it is stored in its own column and not in `external_id`.
-    - **Sessions.** A DB session is never held across the LLM call or the Chat post. Services take an `AsyncSession` and never open one (`docs/architecture/index.md`), so the entry point supplies the log. `ConversationLog` is a `Protocol` in `app/services/conversation_log.py` (methods without a session: `record_user_message(key, message_name, text)`, `record_reply(...)`, `finish_user_message(...)`), which is what `drain` and `process_item` are typed against. `TaskConversationLog`, in `app/tasks/conversation.py`, implements it: each method opens `task_session()` for one write and calls `conversation_log.*(db, ...)`. `process_item` takes the log and never sees a session. Tests pass a fake or one backed by the SQLite session.
+    - **Sessions.** A DB session is never held across the LLM call or the Chat post. Services take an `AsyncSession` and never open one (`docs/architecture/index.md`), so the entry point supplies the log. `ConversationLog` is a `Protocol` in `app/services/conversation_log.py` (methods without a session: `record_user_message(key, message_name, text)`, `record_reply(...)`, `finish_user_message(...)`, and from slice 4 `clear_messages(key)`), which is what `drain` and `process_item` are typed against. `TaskConversationLog`, in `app/tasks/conversation.py`, implements it: each method opens `task_session()` for one write and calls `conversation_log.*(db, ...)`. `process_item` takes the log and never sees a session. Tests pass a fake or one backed by the SQLite session.
     - **Best effort.** A failing log write is logged and never blocks the reply or the pop: the bot's answer matters more than its record. Because every function finds or creates the conversation and the user row itself, a failed first write costs nothing but a short window in which the row is missing.
-    - **Reset.** `/reset` clears the agent's memory only. The conversation row and its messages stay.
+    - **Reset.** `/reset` clears both stores: the agent's memory (checkpointer thread) and the conversation's `messages` rows. The `conversations` row stays, with its `created_at`. After the clear, the reply "Conversation cleared." is recorded with `record_reply`, so the log for that conversation starts with a line that tells a reader what happened. The checkpoint stays empty (the apology/cleared text is not agent memory). The reset command itself is not logged as a user message. Posting "Conversation cleared." and recording it follow the usual rules: the post retries on 5xx, and the record is best effort. The reset item carries the slash command's Chat `message_name`, which keys the `{message_name}#reply` row. If either clear fails, the reset is a failure: the apology is posted and the reply is not recorded (the apology is not a record of anything cleared). A reset writes no user row. Unlike other log writes, this one is not best effort, because telling the user "cleared" while rows remain would be false. Both deletes are idempotent, so a retry is safe.
     - **Thread id.** For Google Chat `thread_id` stays `gchat:{space}:{user}`, so nothing about existing checkpoints changes. A web channel would use its own scheme.
     - **Out of scope here.** Model name, token counts and latency per reply (add as columns later), a UI to browse the log, and a retention policy.
+
+20. **Ownership of a conversation.** A conversation belongs to the Chat user who started it, identified by `sender.name` (`users/…`), the same stable id as in the thread id (Decision 3). It is stored as `conversations.external_user`.
+    - **The requester is never an input.** `_handle_command` builds the reset item from the payload's `message.sender`, which comes from the Google-authenticated event. The command's text and argument are ignored, and `QueueItem` has no field naming a target. A user can only ever address their own (space, user) conversation.
+    - **Enforced where the delete happens.** `clear_messages(db, key)` finds the conversation by `channel` + `thread_id` + `external_user` together, and deletes by that conversation's id. A key whose `external_user` does not match the stored owner finds nothing and deletes nothing. The checkpointer has no owner column: `adelete_thread` is keyed by thread id alone, so its ownership comes from the thread id being built from the authenticated sender (`thread_id(space, sender)`). Both stores are therefore cleared for the same owner. They are not cleared atomically: the checkpoint goes first, then the messages. If the second delete fails, the reset is reported as failed (apology, no "cleared") and the user runs `/reset` again; both deletes are idempotent. There is no in-drain retry for a reset.
+    - **Own lookup.** `clear_messages` uses an owner-checked lookup of its own, not `_find_conversation` (which matches `channel` + `thread_id` only), and it never creates a conversation. A NULL `external_user` matches nothing, which is fine for Google Chat, where it is always set.
+    - **Web later.** A web channel adds `conversations.user_id` (already in the table) as the owner and the same filter on it. No change to the rule.
+    - **Out of scope.** An admin or space-manager reset of someone else's conversation.
 
 ## Code sketches
 
@@ -227,8 +237,10 @@ async def current_checkpoint(graph, ctx) -> str | None: ...
 async def record_failure(
     graph, ctx, message_name, text, from_checkpoint
 ) -> None: ...  # aupdate_state
-async def reset(checkpointer, space: str, user: str) -> None:
-    await checkpointer.adelete_thread(thread_id(space, user))
+async def reset(space: str, user: str) -> None:
+    # checkpoint half only; _process_reset clears the log
+    async with open_checkpointer() as checkpointer:
+        await checkpointer.adelete_thread(thread_id(space, user))
 ```
 
 `app/services/conversation_queue.py` (shape)
@@ -318,11 +330,11 @@ GOOGLE_CHAT_RESET_COMMAND_ID=0
 | `app/agent/graph.py` | 1, 5, 6 | `build_graph`, `finalize` (1); tools (5); middleware (6) |
 | `app/agent/checkpointer.py` | 1 | `open_checkpointer()` async context manager |
 | `app/agent/tools/__init__.py`, `tools/knowledge.py` | 5 | `TOOLS`, `search_knowledge` |
-| `app/services/conversation.py` | 1, 2, 3, 4 | `run_turn` (1); drain + process callback, retries, failure checkpoint (2); log writes in `process_item` (3); reset (4) |
+| `app/services/conversation.py` | 1, 2, 3, 4 | `run_turn` (1); drain + process callback, retries, failure checkpoint (2); log writes in `process_item` (3); reset: checkpoint half in `reset()`, messages clear and the "cleared" reply in `_process_reset` (4) |
 | `app/services/conversation_queue.py` | 2 | Redis queue, lock, dedup |
 | `app/models/conversation.py`, `app/models/__init__.py`, `alembic/versions/` | 3 | `Conversation`, `Message`; migration |
-| `app/services/conversation_log.py` | 3 | `ConversationKey`, the `ConversationLog` protocol, and the functions that record user message, reply and final status; each call finds or creates the conversation |
-| `tests/unit/test_conversation_log.py` | 3 | Log service and its wiring in `process_item` |
+| `app/services/conversation_log.py` | 3, 4 | `ConversationKey`, the `ConversationLog` protocol, and the functions that record user message, reply and final status; each call finds or creates the conversation (3); `clear_messages`, owner-checked (4) |
+| `tests/unit/test_conversation_log.py` | 3, 4 | Log service and its wiring in `process_item`; `clear_messages` and its ownership check (4) |
 | `app/services/google_chat.py` | 1, 2, 4 | Mention → conversation (1); enqueue + dispatch (2); reset command (4) |
 | `app/tasks/conversation.py`, `app/core/celery_app.py` | 2, 3 | `drain_conversation` task; add to `include` (2); `TaskConversationLog` (implements the protocol, opens `task_session()` per write) (3) |
 | `app/cli/__main__.py`, `Makefile` | 1 | `setup-checkpointer`; `make migrate` runs it |
@@ -377,7 +389,13 @@ The checkpointer's Postgres behaviour is LangGraph's own and is not re-tested; `
 **Slice 4**
 - Reset command id → reset item enqueued.
 - Draining [msg, reset, msg] → reply, "Conversation cleared.", then the third turn sees no history.
-- Another (space, user) thread is untouched.
+- After a reset the conversation's `messages` hold exactly one row, the assistant's "Conversation cleared." with its Chat message name. The `conversations` row is still there.
+- **Ownership.** User A and user B each have a conversation in the same space, and A also has one in another space, each with messages and a checkpoint. A resets: A's messages and checkpoint in that space are gone, and B's and A's other-space messages and checkpoints are untouched.
+- `clear_messages` (DB only) with a key that has A's `thread_id` but B's `external_user` deletes nothing. This cannot happen in real use (`thread_id` embeds the user); it guards the filter.
+- The reset path deletes only the checkpoint thread `thread_id(space, sender)`: other users' and spaces' checkpoints are untouched.
+- A reset item built from a command whose text names another user still resets only the sender's conversation.
+- The checkpoint delete fails → the apology is posted, the messages are not deleted, "Conversation cleared." is not recorded. The message delete fails → the apology is posted and "cleared" is not recorded.
+- The same reset item processed twice leaves one "Conversation cleared." row (`record_reply` is keyed on `{message_name}#reply`).
 - Command id 1 (`/add-knowledge`) → logs only.
 - `GOOGLE_CHAT_RESET_COMMAND_ID=0` → no command treated as reset.
 
@@ -402,4 +420,4 @@ The checkpointer's Postgres behaviour is LangGraph's own and is not re-tested; `
   5. DM the bot → "I only work in spaces".
   6. Set `LLM_API_KEY` to garbage and restart the worker → the apology is posted, and the next message after fixing the key works with clean history.
   7. Ask a knowledge question → the worker log shows the `search_knowledge` call.
-  8. In psql, `select * from conversations` and `select role, content, status from messages order by id` show the exchanges from steps 1 to 3 in order; after `/reset` the rows are still there. The garbage-key run in step 6 shows a `failed` user message with the error text.
+  8. In psql, `select * from conversations` and `select role, content, status from messages order by id` show the exchanges from steps 1 to 3 in order; after `/reset` that conversation has only the "Conversation cleared." row left and the `conversations` row is still there. The garbage-key run in step 6 shows a `failed` user message with the error text.
