@@ -1,6 +1,6 @@
 # Review checklist
 
-Used by the `reviewer` subagent and by humans. Review the diff against the stated intent (ticket, plan task or request). Report findings most severe first, each with `file:line`, what is wrong and a concrete failure scenario. Separate **must fix** from **nit**. If nothing is wrong, say so.
+Used by `/do-review` and by humans. Review the diff against the stated intent (ticket, plan task or request). Report findings most severe first, each with `file:line`, what is wrong and a concrete failure scenario. Separate **must fix** from **nit**. If nothing is wrong, say so.
 
 ## 1. Intent
 

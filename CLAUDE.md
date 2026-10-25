@@ -13,7 +13,7 @@ make format    # ruff format + ruff check --fix
 uv run cli --help
 ```
 
-Before saying a task is done: `uv run ruff check . && uv run ruff format --check . && uv run pytest`. Tests need no Postgres or Redis: SQLite via aiosqlite, and Redis is never contacted (the rate limiter is overridden, Celery publishing is stubbed or refused in `tests/conftest.py`). A Stop hook (`.claude/hooks/check.sh`) runs the same checks and asks for a `reviewer` subagent pass; do not bypass it.
+Before saying a task is done: `uv run ruff check . && uv run ruff format --check . && uv run pytest`. Tests need no Postgres or Redis: SQLite via aiosqlite, and Redis is never contacted (the rate limiter is overridden, Celery publishing is stubbed or refused in `tests/conftest.py`). A Stop hook (`.claude/hooks/check.sh`) runs the same checks; do not bypass it.
 
 ## Layout
 

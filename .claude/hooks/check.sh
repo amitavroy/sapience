@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Stop hook. Exit 2 sends the output back to Claude, which then has to act on it.
-#   1. lint, format check and tests must pass
-#   2. once per changed tree, Claude must have the `reviewer` subagent review the diff
+#   lint, format check and tests must pass
 # Skipped when the tree is clean, when it is unchanged since the last passing run (a chat-only
 # turn), and when the turn was a /do-commit.
 cd "$CLAUDE_PROJECT_DIR" || exit 1
@@ -47,7 +46,6 @@ hash=$(
   } 2>/dev/null | shasum | cut -d' ' -f1
 )
 # Nothing changed since the last run that passed: a chat-only turn needs no check or review.
-# Not while continuing from a block, where the pending review request still has to be served.
 if [ "$active" != "true" ] && [ "$hash" = "$(cat "$state/passed" 2>/dev/null)" ]; then exit 0; fi
 
 out=$(
@@ -67,17 +65,5 @@ out=$(
   exit 2
 }
 
-# Review once per distinct tree, and at most once per chain of hook-forced continuations.
-requested=$(cat "$state/review_requested" 2>/dev/null || echo 0)
-if [ "$hash" != "$(cat "$state/reviewed" 2>/dev/null)" ] && [ "$requested" != "1" ]; then
-  echo "$hash" >"$state/reviewed"
-  echo 1 >"$state/review_requested"
-  {
-    echo "Checks pass. Before finishing, run the \`reviewer\` subagent on the current diff."
-    echo "Tell it the intent: the task you were asked to do in this conversation (plan/ticket/request)."
-    echo "Fix its must-fix findings, then finish. Mention nits in your report instead of fixing them."
-  } >&2
-  exit 2
-fi
 echo "$hash" >"$state/passed"
 exit 0
