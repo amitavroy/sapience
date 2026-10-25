@@ -9,7 +9,7 @@ Each slice ends in a working, reviewable state with passing tests. Pause for rev
 | 1 | Bot answers with memory | Deps: `langgraph`, `langchain`, `langchain-openai`, `langgraph-checkpoint-postgres`, `psycopg[binary]` | [x] |
 | 1 | Bot answers with memory | `app/core/config.py` + `.env.example`: `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_CHAT_MODEL`, `LLM_SUMMARY_MODEL`, `LLM_TIMEOUT_SECONDS` | [x] |
 | 1 | Bot answers with memory | `app/agent/models.py`: `get_model(role)` factory (not cached; see Decision 7) | [x] |
-| 1 | Bot answers with memory | `app/agent/state.py`, `prompts.py`, `graph.py`: `ConversationState`, system prompt, `build_graph(checkpointer)` = `agent` (`create_agent` subgraph, no tools yet) → `finalize` | [x] |
+| 1 | Bot answers with memory | `app/agent/state.py`, `prompts.py`, `graph.py`: `ConversationState`, system prompt, `build_graph(checkpointer)` = `agent` (`create_agent` called from the `agent` node, no tools yet) → `finalize` | [x] |
 | 1 | Bot answers with memory | `app/agent/checkpointer.py`: `open_checkpointer()` (AsyncPostgresSaver from `DATABASE_URL`); `uv run cli setup-checkpointer`; `make migrate` runs it after Alembic | [x] |
 | 1 | Bot answers with memory | `app/services/conversation.py`: `thread_id(space, user)`, `run_turn(...) -> str` | [x] |
 | 1 | Bot answers with memory | `app/services/google_chat.py`: `_handle_mention` → DM: "I only work in spaces"; empty text: hint; else `run_turn` → `send_message`; failure → "Sorry, something went wrong" | [x] |
@@ -34,7 +34,7 @@ Each slice ends in a working, reviewable state with passing tests. Pause for rev
 | 5 | Knowledge tool | `app/agent/tools/knowledge.py`: `search_knowledge(query)` returns a fixed string; space read from runtime context; wired into the agent | [x] |
 | 5 | Knowledge tool | Tests: scripted tool call → tool runs with the space from context → answer uses its output; tool not exposed a `space` argument | [x] |
 | 6 | Summarization | `SummarizationMiddleware(model=get_model("summary"), trigger=("tokens", 8000), keep=("messages", 20))` on the agent | [x] |
-| 6 | Summarization | Tests: below threshold no summary call; above → history replaced by summary + last 20, persisted in the checkpoint | [ ] |
+| 6 | Summarization | Tests: below threshold no summary call; above → history replaced by summary + last 20, persisted in the checkpoint | [x] |
 | 7 | Docs | `docs/wiki/conversation.md` (flow, queue, conversation log, reset, settings, troubleshooting); `docs/wiki/google-bot.md` "What the worker does" updated; `docs/wiki/index.md` line | [x] |
 
 ## Context
@@ -64,8 +64,8 @@ Decisions settled in the design discussion:
                   └─ create_agent(model, tools, system_prompt, middleware=[Summarization])
 
    - The outer graph owns the flow, so future fixed steps (retrieve before the agent, guardrails, routing) become nodes here.
-   - The agent loop (model ↔ tools) is LangChain v1 `create_agent`, compiled and added as the `agent` node. That is what lets `SummarizationMiddleware` work, since middleware attaches to `create_agent`, not to a hand-written graph.
-   - The subgraph shares the `messages` key and inherits the parent's checkpointer.
+   - The agent loop (model ↔ tools) is LangChain v1 `create_agent`, compiled and called from the `agent` node (a function, not the subgraph itself, see below). That is what lets `SummarizationMiddleware` work, since middleware attaches to `create_agent`, not to a hand-written graph.
+   - The `agent` node shares the `messages` key and the subgraph inherits the parent's checkpointer. It returns `[RemoveMessage(REMOVE_ALL_MESSAGES), *result["messages"]]`, because a subgraph's output is merged by the parent's `add_messages`, which never sees the middleware's removals: without it the checkpoint keeps every summarized message.
    - `finalize` reads the last AI message, trims it to 8000 chars (with "… (truncated)") and stores it in `state["reply"]`. Chat formatting rules live in the system prompt.
 6. **State.**
 

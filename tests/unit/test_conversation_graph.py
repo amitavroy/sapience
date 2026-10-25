@@ -136,3 +136,64 @@ async def test_tool_call_runs_with_the_space_from_context(
 
 def test_search_knowledge_exposes_only_the_query_to_the_model() -> None:
     assert set(search_knowledge.tool_call_schema.model_json_schema()["properties"]) == {"query"}
+
+
+@pytest.fixture
+def summary_model(monkeypatch: pytest.MonkeyPatch, model: FakeChatModel) -> FakeChatModel:
+    """Separate fake for the "summary" role, so its calls can be told apart from the chat's."""
+    summarizer = FakeChatModel(replies=["SUMMARY of the earlier talk"])
+    monkeypatch.setattr(
+        graph_module, "get_model", lambda role: summarizer if role == "summary" else model
+    )
+    return summarizer
+
+
+async def _talk(graph, count: int, text: str) -> None:
+    for i in range(count):
+        await run_turn(graph, ANN, f"spaces/A/messages/{i}", text)
+
+
+async def _stored_messages(graph) -> list:
+    config = {"configurable": {"thread_id": thread_id(ANN.space, ANN.user)}}
+    return (await graph.aget_state(config)).values["messages"]
+
+
+async def test_history_under_the_trigger_is_not_summarized(
+    summary_model: FakeChatModel, model: FakeChatModel
+) -> None:
+    graph = build_graph(InMemorySaver())
+
+    await _talk(graph, 3, "short question")
+
+    assert summary_model.calls == []
+    assert len(await _stored_messages(graph)) == 6  # 3 human + 3 AI, nothing replaced
+
+
+async def test_history_over_the_trigger_is_summarized_for_the_model(
+    monkeypatch: pytest.MonkeyPatch, summary_model: FakeChatModel, model: FakeChatModel
+) -> None:
+    monkeypatch.setattr(graph_module, "SUMMARY_TRIGGER_TOKENS", 200)
+    monkeypatch.setattr(graph_module, "SUMMARY_KEEP_MESSAGES", 4)
+    graph = build_graph(InMemorySaver())
+
+    await _talk(graph, 6, "a fairly long question " * 20)
+
+    assert len(summary_model.calls) >= 1
+    # summary + the last 4 messages + this turn's question, not the whole history
+    last_prompt = texts(model.calls[-1])
+    assert any("SUMMARY of the earlier talk" in t for t in last_prompt)
+    assert len(last_prompt) < 12
+
+
+async def test_summary_replaces_old_messages_in_the_checkpoint(
+    monkeypatch: pytest.MonkeyPatch, summary_model: FakeChatModel, model: FakeChatModel
+) -> None:
+    monkeypatch.setattr(graph_module, "SUMMARY_TRIGGER_TOKENS", 200)
+    monkeypatch.setattr(graph_module, "SUMMARY_KEEP_MESSAGES", 4)
+    graph = build_graph(InMemorySaver())
+
+    await _talk(graph, 6, "a fairly long question " * 20)
+
+    stored = await _stored_messages(graph)
+    assert "SUMMARY of the earlier talk" in stored[0].text
+    assert len(stored) <= 4 + 2
