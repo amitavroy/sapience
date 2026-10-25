@@ -18,6 +18,7 @@ ITEM = QueueItem(
     message_name="spaces/A/messages/1",
     text="hi",
     display_name="Ann",
+    email="ann@example.com",
 )
 
 
@@ -60,8 +61,19 @@ async def test_message_item_runs_a_turn_and_posts_the_reply(turns: list[tuple]) 
 
     [(ctx, message_name, text)] = turns
     assert (ctx.space, ctx.user, ctx.display_name) == ("spaces/A", "users/1", "Ann")
+    assert ctx.email == "ann@example.com"
     assert (message_name, text) == ("spaces/A/messages/1", "hi")
     assert chat.sent == [("spaces/A", "reply")]
+
+
+async def test_item_queued_before_email_existed_runs_with_no_email(turns: list[tuple]) -> None:
+    # an item from the previous deploy has no email key; it must still parse and run
+    raw = ITEM.model_dump_json(exclude={"email"})
+
+    await conversation.process_item(FakeChat(), NullLog(), QueueItem.model_validate_json(raw))
+
+    [(ctx, _, _)] = turns
+    assert ctx.email is None
 
 
 async def test_failed_turn_posts_the_apology(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -36,6 +36,8 @@ class QueueItem(BaseModel):
     message_name: str = ""
     text: str = ""
     display_name: str = ""
+    # from the Google-authenticated event, never the message text; matches the app user
+    email: str | None = None
     trace_id: str = ""
     enqueued_at: float = Field(default_factory=time.time)
 

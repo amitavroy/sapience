@@ -122,11 +122,24 @@ async def test_mention_in_a_space_is_queued_and_a_drain_dispatched(
         "message_name": "spaces/AAAAAAAAAAA/messages/MSG1.MSG1",
         "text": "hi",
         "display_name": "Ann Example",
+        "email": "ann@example.com",
         "trace_id": "trace-abc",
         "enqueued_at": 0,
     }
     assert dispatched == [(DRAIN_TASK, "spaces/AAAAAAAAAAA", "users/1001", "trace-abc")]
     assert fake_chat.sent == []  # the reply comes from the drain, not the handler
+
+
+async def test_mention_from_a_sender_without_email_is_queued_with_none(
+    redis: FakeRedis, dispatched: list[tuple]
+) -> None:
+    event = load_fixture(SPACE)["chat"]
+    del event["messagePayload"]["message"]["sender"]["email"]
+
+    await handle_event(ChatPayload.model_validate(event))
+
+    [item] = queued(redis)
+    assert item["email"] is None
 
 
 async def test_duplicate_event_is_queued_once_but_still_dispatches(

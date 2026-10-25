@@ -17,3 +17,4 @@ class ConversationContext:
     space: str
     user: str
     display_name: str
+    email: str | None = None  # the asker's collections are found by it; None = no search

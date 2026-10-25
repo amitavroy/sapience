@@ -71,6 +71,7 @@ async def _handle_mention(payload: MessagePayload) -> None:
         message_name=msg.name,
         text=text,
         display_name=msg.sender.display_name or msg.sender.name,
+        email=msg.sender.email,
         trace_id=trace_id.get(),
     )
     async with conversation_queue.open_redis() as redis:

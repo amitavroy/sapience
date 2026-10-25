@@ -213,7 +213,9 @@ async def process_item(chat: GoogleChatClient, log: ConversationLog, item: Queue
     if item.kind != "message":
         logger.warning(f"unsupported queue item kind={item.kind} space={item.space}")
         return
-    ctx = ConversationContext(space=item.space, user=item.user, display_name=item.display_name)
+    ctx = ConversationContext(
+        space=item.space, user=item.user, display_name=item.display_name, email=item.email
+    )
     key = _key(item)
     await _logged("user message", log.record_user_message(key, item.message_name, item.text))
     try:
