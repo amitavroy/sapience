@@ -105,3 +105,7 @@ Google Chat @mentions and slash commands arrive at `POST /ingest/google-chat`. T
 # Ingestion: store, chunk, embed
 
 A crawled page becomes a `pending` document with chunks, and a second task embeds the chunks (`pending` → `processing` → `ready`, or `failed`). Chunking is structure-aware: it follows headings, merges small sections, splits large ones with overlap, and is chosen by MIME type. Embeddings come from an OpenAI-compatible API (OpenRouter by default). Commands, statuses, chunking rules, retries, settings and limits: [ingestion.md](ingestion.md).
+
+# Conversation agent
+
+An @mention in a space starts a conversation with an agent that remembers that user in that space. Messages go through a per-conversation Redis queue so replies stay in order, failed turns retry in place and end in an apology, every exchange is logged in `conversations` / `messages`, and `/reset` clears it. Flow, queue, retries, log, settings and troubleshooting: [conversation.md](conversation.md).

@@ -69,12 +69,12 @@ The endpoint enqueues only the `chat` part of the event, exactly as Google sent 
 
 - Task: `process_chat_event(chat, trace_id)` in `app/tasks/google_chat.py`. It validates the payload into `ChatPayload`, then runs `handle_event` in `app/services/google_chat.py`.
 - `handle_event` only decides the event kind and delegates to a private handler; each handler does its own logging.
-  - `_handle_mention` logs `google chat message space=... sender=... text=...`.
-  - `_handle_command` logs `google chat command id=... space=... sender=... text=...`.
+  - `_handle_mention` logs `google chat message space=... sender=... text=...`, then queues the message for the conversation agent (a DM or an empty mention gets a short reply instead). The worker's `drain_conversation` task runs the turn and posts the reply to the space. See [conversation.md](conversation.md).
+  - `_handle_command` logs `google chat command id=... space=... sender=... text=...`. The command whose ID is `GOOGLE_CHAT_RESET_COMMAND_ID` (`/reset`) is queued like a message and clears the user's conversation in that space; other commands are only logged.
   - In both, the text is `argumentText` (what follows the @mention or the command name) stripped of its leading space, or the full text if there is none.
   - An event with neither payload is ignored.
-- Ingesting messages and `/add-knowledge` content into the RAG pipeline is a later ticket and plugs into these two handlers.
-- The request's trace id is passed to the task, so worker log lines carry the same `trace_id` as the request. The job name is `process_chat_event`.
+- Ingesting `/add-knowledge` content into the RAG pipeline is a later ticket and plugs into `_handle_command`.
+- The request's trace id is passed to the task, so worker log lines carry the same `trace_id` as the request. The job name is `process_chat_event`, or `drain_conversation` for the conversation task.
 - Tasks are acknowledged late, so a task can run twice, and Google also retries failed events. Anything the task does later must be idempotent; the message `name` (for example `spaces/AAA/messages/BBB`) is the natural dedup key.
 - Payload models (`app/schemas/google_chat.py`) use camelCase aliases and keep unknown fields, so new fields from Google do not break parsing. A DM has no space `displayName` and no mention annotations; both are optional.
 

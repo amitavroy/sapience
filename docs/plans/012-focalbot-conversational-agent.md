@@ -35,7 +35,7 @@ Each slice ends in a working, reviewable state with passing tests. Pause for rev
 | 5 | Knowledge tool | Tests: scripted tool call → tool runs with the space from context → answer uses its output; tool not exposed a `space` argument | [x] |
 | 6 | Summarization | `SummarizationMiddleware(model=get_model("summary"), trigger=("tokens", 8000), keep=("messages", 20))` on the agent | [x] |
 | 6 | Summarization | Tests: below threshold no summary call; above → history replaced by summary + last 20, persisted in the checkpoint | [ ] |
-| 7 | Docs | `docs/wiki/conversation.md` (flow, queue, conversation log, reset, settings, troubleshooting); `docs/wiki/google-bot.md` "What the worker does" updated; `docs/wiki/index.md` line | [ ] |
+| 7 | Docs | `docs/wiki/conversation.md` (flow, queue, conversation log, reset, settings, troubleshooting); `docs/wiki/google-bot.md` "What the worker does" updated; `docs/wiki/index.md` line | [x] |
 
 ## Context
 
