@@ -8,7 +8,7 @@ from app.models.conversation import Conversation, Message, MessageRole, MessageS
 from app.services import conversation, conversation_log
 from app.services.conversation_log import ConversationKey
 from app.services.conversation_queue import QueueItem
-from app.services.google_chat import FAILURE_REPLY
+from app.services.google_chat import FAILURE_REPLY, RESET_REPLY
 from tests.agent_helpers import FakeChat, FakeGraph
 
 ITEM = QueueItem(
@@ -42,6 +42,10 @@ class SessionLog:
     async def finish_user_message(self, key, message_name, text, status, error):
         self._check("finish_user_message")
         await conversation_log.finish_user_message(self.db, key, message_name, text, status, error)
+
+    async def clear_messages(self, key):
+        self._check("clear_messages")
+        await conversation_log.clear_messages(self.db, key)
 
 
 @pytest.fixture(autouse=True)
@@ -203,3 +207,175 @@ async def test_failing_log_does_not_replace_the_reply_with_the_apology(
     await conversation.process_item(chat, log, ITEM)
 
     assert chat.sent == [("spaces/A", "hello Ann")]
+
+
+# /reset: the log half (clear_messages) and its wiring in _process_reset
+
+RESET = ITEM.model_copy(update={"kind": "reset", "message_name": "spaces/A/messages/reset-1"})
+
+
+def _key(
+    user: str = "users/1", space: str = "spaces/A", owner: str | None = None
+) -> ConversationKey:
+    return ConversationKey(
+        channel="google_chat",
+        thread_id=conversation.thread_id(space, user),
+        space=space,
+        external_user=owner if owner is not None else user,
+        display_name=user,
+    )
+
+
+async def _seed(db: AsyncSession, key: ConversationKey, name: str) -> None:
+    await conversation_log.record_user_message(db, key, name, "hello")
+    await conversation_log.record_reply(db, key, name, "hi there", f"{name}/chat")
+
+
+async def _by_thread(db: AsyncSession) -> dict[str, list[str]]:
+    rows = (
+        await db.execute(select(Conversation.thread_id, Message.external_id).join(Message))
+    ).all()
+    grouped: dict[str, list[str]] = {}
+    for thread, external_id in rows:
+        grouped.setdefault(thread, []).append(external_id)
+    return grouped
+
+
+class RecordingCheckpointer:
+    """Stands in for the checkpointer behind reset(); `fail` makes the delete raise."""
+
+    def __init__(self, fail: bool = False) -> None:
+        self.fail = fail
+        self.deleted: list[str] = []
+
+    async def adelete_thread(self, thread_id: str) -> None:
+        if self.fail:
+            raise ConnectionError("checkpoint db down")
+        self.deleted.append(thread_id)
+
+
+@pytest.fixture
+def checkpointer(monkeypatch: pytest.MonkeyPatch) -> RecordingCheckpointer:
+    saver = RecordingCheckpointer()
+
+    @asynccontextmanager
+    async def open_checkpointer():
+        yield saver
+
+    monkeypatch.setattr(conversation, "open_checkpointer", open_checkpointer)
+    return saver
+
+
+async def test_reset_clears_the_owners_messages_and_checkpoint_and_logs_the_reply(
+    db_session: AsyncSession, checkpointer: RecordingCheckpointer
+) -> None:
+    await _seed(db_session, _key(), "spaces/A/messages/1")
+    chat = FakeChat()
+
+    await conversation.process_item(chat, SessionLog(db_session), RESET)
+
+    assert chat.sent == [("spaces/A", RESET_REPLY)]
+    assert checkpointer.deleted == ["gchat:spaces/A:users/1"]
+    [row] = (await db_session.scalars(select(Message))).all()
+    assert (row.role, row.content, row.status) == (MessageRole.ASSISTANT, RESET_REPLY, None)
+    assert row.external_id == f"{RESET.message_name}#reply"
+    assert row.chat_message_name == "spaces/A/messages/1"
+    assert len((await db_session.scalars(select(Conversation))).all()) == 1
+
+
+async def test_reset_touches_only_the_owners_data(
+    db_session: AsyncSession, checkpointer: RecordingCheckpointer
+) -> None:
+    await _seed(db_session, _key("users/1"), "spaces/A/messages/a1")
+    await _seed(db_session, _key("users/2"), "spaces/A/messages/b1")
+    await _seed(db_session, _key("users/1", "spaces/B"), "spaces/B/messages/a1")
+
+    await conversation.process_item(FakeChat(), SessionLog(db_session), RESET)
+
+    grouped = await _by_thread(db_session)
+    assert grouped["gchat:spaces/A:users/1"] == [f"{RESET.message_name}#reply"]
+    assert len(grouped["gchat:spaces/A:users/2"]) == 2
+    assert len(grouped["gchat:spaces/B:users/1"]) == 2
+    assert checkpointer.deleted == ["gchat:spaces/A:users/1"]
+
+
+async def test_clear_messages_needs_the_stored_owner(db_session: AsyncSession) -> None:
+    await _seed(db_session, _key("users/1"), "spaces/A/messages/1")
+    thread = conversation.thread_id("spaces/A", "users/1")
+
+    # the thread id is users/1's, the claimed owner is not
+    await conversation_log.clear_messages(db_session, _key("users/1", owner="users/2"))
+    assert len((await _by_thread(db_session))[thread]) == 2
+
+    # no owner at all must not match a row either
+    stored = (await db_session.scalars(select(Conversation))).one()
+    stored.external_user = None
+    await db_session.commit()
+    no_owner = ConversationKey("google_chat", thread, "spaces/A", None, "x")
+    await conversation_log.clear_messages(db_session, no_owner)
+    assert len((await _by_thread(db_session))[thread]) == 2
+
+
+async def test_reset_item_names_no_other_user_or_conversation(
+    db_session: AsyncSession, checkpointer: RecordingCheckpointer
+) -> None:
+    assert not {"target", "target_user", "thread_id", "conversation_id"} & set(
+        QueueItem.model_fields
+    )
+    await _seed(db_session, _key("users/2"), "spaces/A/messages/b1")
+    # the command text names another user; only the sender's conversation is addressed
+    item = RESET.model_copy(update={"text": "users/2"})
+
+    await conversation.process_item(FakeChat(), SessionLog(db_session), item)
+
+    assert len((await _by_thread(db_session))["gchat:spaces/A:users/2"]) == 2
+    assert checkpointer.deleted == ["gchat:spaces/A:users/1"]
+
+
+async def test_reset_before_any_conversation_still_posts_and_records(
+    db_session: AsyncSession, checkpointer: RecordingCheckpointer
+) -> None:
+    chat = FakeChat()
+
+    await conversation.process_item(chat, SessionLog(db_session), RESET)
+
+    assert chat.sent == [("spaces/A", RESET_REPLY)]
+    [row] = (await db_session.scalars(select(Message))).all()
+    assert row.content == RESET_REPLY
+
+
+@pytest.mark.parametrize("broken", ["checkpoint", "messages"])
+async def test_failed_clear_apologises_and_the_next_reset_succeeds(
+    db_session: AsyncSession,
+    checkpointer: RecordingCheckpointer,
+    broken: str,
+) -> None:
+    await _seed(db_session, _key(), "spaces/A/messages/1")
+    checkpointer.fail = broken == "checkpoint"
+    log = SessionLog(db_session, fail=frozenset({"clear_messages"} if broken == "messages" else ()))
+    chat = FakeChat()
+
+    await conversation.process_item(chat, log, RESET)
+
+    assert chat.sent == [("spaces/A", FAILURE_REPLY)]
+    rows = await _messages(db_session)
+    assert set(rows) == {"spaces/A/messages/1", "spaces/A/messages/1#reply"}  # nothing recorded
+    if broken == "checkpoint":
+        assert len(rows) == 2  # the messages were not touched either
+
+    checkpointer.fail = False
+    await conversation.process_item(chat, SessionLog(db_session), RESET)
+
+    assert chat.sent[-1] == ("spaces/A", RESET_REPLY)
+    assert set(await _messages(db_session)) == {f"{RESET.message_name}#reply"}
+
+
+async def test_retried_reset_does_not_duplicate_the_reply_row(
+    db_session: AsyncSession, checkpointer: RecordingCheckpointer
+) -> None:
+    log = SessionLog(db_session)
+
+    await conversation.process_item(FakeChat(), log, RESET)
+    await conversation.process_item(FakeChat(), log, RESET)
+
+    assert len((await db_session.scalars(select(Message))).all()) == 1

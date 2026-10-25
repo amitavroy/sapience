@@ -167,39 +167,54 @@ async def reset(space: str, user: str) -> None:
         await checkpointer.adelete_thread(thread_id(space, user))
 
 
-async def _process_reset(chat: GoogleChatClient, item: QueueItem) -> None:
-    try:
-        await reset(item.space, item.user)
-        reply = google_chat_service.RESET_REPLY
-    except Exception as e:
-        logger.error(f"conversation reset failed space={item.space}: {_describe(e)}")
-        reply = google_chat_service.FAILURE_REPLY
-    try:
-        await _with_retries(
-            lambda: google_chat_service.send_message(chat, item.space, reply),
-            "reset reply post",
-            item.space,
-        )
-    except Exception as e:
-        logger.error(f"could not post the reset reply: {_describe(e)}")
-
-
-async def process_item(chat: GoogleChatClient, log: ConversationLog, item: QueueItem) -> None:
-    """Handle one queued item; never raises, so the drain can always pop it."""
-    if item.kind == "reset":
-        await _process_reset(chat, item)
-        return
-    if item.kind != "message":
-        logger.warning(f"unsupported queue item kind={item.kind} space={item.space}")
-        return
-    ctx = ConversationContext(space=item.space, user=item.user, display_name=item.display_name)
-    key = ConversationKey(
+def _key(item: QueueItem) -> ConversationKey:
+    return ConversationKey(
         channel="google_chat",
         thread_id=thread_id(item.space, item.user),
         space=item.space,
         external_user=item.user,
         display_name=item.display_name,
     )
+
+
+async def _process_reset(chat: GoogleChatClient, log: ConversationLog, item: QueueItem) -> None:
+    key = _key(item)
+    cleared = True
+    try:
+        # not through _logged: saying "cleared" while messages remain would be false. Both deletes
+        # are idempotent, so the user can run /reset again after a failure.
+        await reset(item.space, item.user)
+        await log.clear_messages(key)
+        reply = google_chat_service.RESET_REPLY
+    except Exception as e:
+        cleared = False
+        logger.error(f"conversation reset failed space={item.space}: {_describe(e)}")
+        reply = google_chat_service.FAILURE_REPLY
+    chat_message_name: str | None = None
+    try:
+        chat_message_name = await _with_retries(
+            lambda: google_chat_service.send_message(chat, item.space, reply),
+            "reset reply post",
+            item.space,
+        )
+    except Exception as e:
+        logger.error(f"could not post the reset reply: {_describe(e)}")
+    if cleared:  # the apology records nothing: nothing was cleared
+        await _logged(
+            "reset reply", log.record_reply(key, item.message_name, reply, chat_message_name)
+        )
+
+
+async def process_item(chat: GoogleChatClient, log: ConversationLog, item: QueueItem) -> None:
+    """Handle one queued item; never raises, so the drain can always pop it."""
+    if item.kind == "reset":
+        await _process_reset(chat, log, item)
+        return
+    if item.kind != "message":
+        logger.warning(f"unsupported queue item kind={item.kind} space={item.space}")
+        return
+    ctx = ConversationContext(space=item.space, user=item.user, display_name=item.display_name)
+    key = _key(item)
     await _logged("user message", log.record_user_message(key, item.message_name, item.text))
     try:
         # the graph is opened here, not once per drain: a missing LLM key or an unreachable
