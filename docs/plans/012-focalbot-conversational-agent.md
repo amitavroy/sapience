@@ -33,7 +33,7 @@ Each slice ends in a working, reviewable state with passing tests. Pause for rev
 | 4 | /reset | Manual: register `/reset` in the Chat console, run it, follow-up has no memory; `messages` holds only "Conversation cleared." for that conversation, the conversation row remains | [x] |
 | 5 | Knowledge tool | `app/agent/tools/knowledge.py`: `search_knowledge(query)` returns a fixed string; space read from runtime context; wired into the agent | [x] |
 | 5 | Knowledge tool | Tests: scripted tool call → tool runs with the space from context → answer uses its output; tool not exposed a `space` argument | [x] |
-| 6 | Summarization | `SummarizationMiddleware(model=get_model("summary"), trigger=("tokens", 8000), keep=("messages", 20))` on the agent | [ ] |
+| 6 | Summarization | `SummarizationMiddleware(model=get_model("summary"), trigger=("tokens", 8000), keep=("messages", 20))` on the agent | [x] |
 | 6 | Summarization | Tests: below threshold no summary call; above → history replaced by summary + last 20, persisted in the checkpoint | [ ] |
 | 7 | Docs | `docs/wiki/conversation.md` (flow, queue, conversation log, reset, settings, troubleshooting); `docs/wiki/google-bot.md` "What the worker does" updated; `docs/wiki/index.md` line | [ ] |
 
