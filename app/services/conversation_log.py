@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Protocol
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,6 +42,8 @@ class ConversationLog(Protocol):
         status: MessageStatus,
         error: str | None,
     ) -> None: ...
+
+    async def clear_messages(self, key: ConversationKey) -> None: ...
 
 
 def reply_external_id(message_name: str) -> str:
@@ -164,4 +166,27 @@ async def record_reply(
     message.content = text
     message.chat_message_name = chat_message_name
     conversation.last_message_at = func.now()
+    await db.commit()
+
+
+async def clear_messages(db: AsyncSession, key: ConversationKey) -> None:
+    """Delete the messages of the conversation `key` owns; the conversation row stays.
+
+    Ownership is checked here, in the lookup: a key whose `external_user` is not the stored owner
+    (or is None) finds nothing and deletes nothing. Never creates a conversation, and is
+    idempotent, so a retried reset is safe.
+    """
+    # `col == None` compiles to IS NULL, so without this a None owner would match unowned rows
+    if key.external_user is None:
+        return
+    conversation_id = await db.scalar(
+        select(Conversation.id).where(
+            Conversation.channel == key.channel,
+            Conversation.thread_id == key.thread_id,
+            Conversation.external_user == key.external_user,
+        )
+    )
+    if conversation_id is None:
+        return
+    await db.execute(delete(Message).where(Message.conversation_id == conversation_id))
     await db.commit()

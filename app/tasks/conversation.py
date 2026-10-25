@@ -38,6 +38,10 @@ class TaskConversationLog:
         async with task_session() as db:
             await conversation_log.finish_user_message(db, key, message_name, text, status, error)
 
+    async def clear_messages(self, key: ConversationKey) -> None:
+        async with task_session() as db:
+            await conversation_log.clear_messages(db, key)
+
 
 @celery_app.task
 def drain_conversation(space: str, user: str, trace_id: str) -> None:
