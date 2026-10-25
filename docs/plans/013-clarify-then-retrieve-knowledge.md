@@ -7,13 +7,14 @@ Each slice ends in a working, reviewable state with passing tests. Pause for rev
 | # | Slice | Step | Done |
 |---|-------|------|------|
 | 1 | Answers from the knowledge base | `app/core/config.py` + `.env.example`: `LLM_CLASSIFY_MODEL`; `app/agent/models.py`: `classify` role (Decision 12) | [x] |
-| 1 | Answers from the knowledge base | `QueueItem.email` and `ConversationContext.email` from `sender.email` (Decision 4) | [ ] |
-| 1 | Answers from the knowledge base | `app/services/retrieval.py`: `RetrievedChunk`, `probe(db, email, vectors, k)` as one `UNION ALL` query, `deep_search(db, email, vector, doc_ids, k)`, membership by email in the same query; the `KnowledgeSearch` protocol (Decisions 4, 5, 6) | [ ] |
+| 1 | Answers from the knowledge base | Sender identity at the webhook: `users.google_chat_user_id` (nullable, unique) and nullable `password_hash`, one migration; `authenticate` rejects a user with no password; `GOOGLE_CHAT_ALLOWED_EMAIL_DOMAINS` in `config.py` + `.env.example`; `resolve_chat_user` in `app/services/user.py` (domain check, link, create); `get_chat_sender` dependency after `get_verified_chat_event`; a sender it rejects gets `NO_ACCESS_REPLY` and nothing is queued (Decision 4) | [ ] |
+| 1 | Answers from the knowledge base | The resolved id travels instead of the email: `process_chat_event(chat, trace_id, app_user_id)`; `QueueItem.user_id` and `ConversationContext.user_id` replace the uncommitted `.email` fields (Decision 4) | [ ] |
+| 1 | Answers from the knowledge base | `app/services/retrieval.py`: `RetrievedChunk`, `probe(db, user_id, vectors, k)` as one `UNION ALL` query, `deep_search(db, user_id, vector, doc_ids, k)`, membership by user id in the same query; the `KnowledgeSearch` protocol (Decisions 4, 5, 6) | [ ] |
 | 1 | Answers from the knowledge base | `app/tasks/conversation.py`: `TaskKnowledgeSearch` (embeds, then opens `task_session()` per search); passed to the graph through `ConversationContext.search` (Decision 7) | [ ] |
 | 1 | Answers from the knowledge base | Graph nodes `needs_kb` (classify), `rewrite` (chat, 2–3 queries), `probe`, `grade` (chat, structured), `deep_retrieve`; `knowledge` in state; the system prompt lists the retrieved chunks with their sources; `ambiguous` handled as `clear` until slice 2 (Decisions 1, 2, 3, 8) | [ ] |
 | 1 | Answers from the knowledge base | `search_knowledge` tool: real deep search over the asker's collections, for follow-ups (Decision 9) | [ ] |
-| 1 | Answers from the knowledge base | Tests: routing for small talk / no linked user / no collections / no match / clear; grade output validated (unknown doc ids dropped); one `probe` call per turn with every query vector; chunks reach the agent prompt; tool uses the email from context; failures in search end in the apology | [ ] |
-| 1 | Answers from the knowledge base | Manual (pgvector): ingest two pages into a collection you are a member of; ask about one; the reply cites it; `EXPLAIN` the probe query uses the HNSW index; a user with no matching email gets the "can't find your knowledge base" reply | [ ] |
+| 1 | Answers from the knowledge base | Tests: routing for small talk / no collections / no match / clear; grade output validated (unknown doc ids dropped); one `probe` call per turn with every query vector; chunks reach the agent prompt; tool uses the user id from context; failures in search end in the apology | [ ] |
+| 1 | Answers from the knowledge base | Manual (pgvector): ingest two pages into a collection you are a member of; ask about one; the reply cites it; `EXPLAIN` the probe query uses the HNSW index; a Chat account with no app user is created on its first mention, gets the "couldn't find anything" reply, and cannot log in; an account outside the allowed domains gets the no-access reply | [ ] |
 | 2 | Clarifying buttons | `GoogleChatClient.create_card_message` and `update_message`; `google_chat.send_card` / `edit_card` (Decision 14) | [ ] |
 | 2 | Clarifying buttons | Graph: `grade` → `ask_clarification` (`interrupt(payload)`) → `resolve_choice` → `deep_retrieve`; `run_turn` returns `TurnResult` (reply text, or a card to post) (Decisions 10, 11) | [ ] |
 | 2 | Clarifying buttons | Webhook: `buttonClickedPayload` + `commonEventObject.parameters` → enqueue a `choice` item; respond with an update that disables the buttons; clicks from anyone but the asker get no update (Decisions 13, 15) | [ ] |
@@ -48,8 +49,9 @@ Decisions settled in the design discussion:
 - The graph pauses with `interrupt()` and resumes on the click or on the next typed message.
 - An unrelated typed reply abandons the question and is handled as a new message.
 - Only the asker can answer. A question expires after 30 minutes.
-- Search all collections the asker is a member of; a Chat user is matched to an app user by email.
+- Search all collections the asker is a member of. A Chat user is linked to an app user by their Chat user id, stored on `users`; the verified email is used once, at first contact, to link an existing user or create one with no password. Only emails in the domains listed in `GOOGLE_CHAT_ALLOWED_EMAIL_DOMAINS` are accepted. This is resolved at the webhook, right after the event is verified; only the app user id travels on, never the email.
 - Classification uses Jev (`typesafe/jev-router`) on OpenRouter through a new model role, with no other backend.
+- Out of scope: adding members to collections (CLI or API) is a later ticket; until then, membership rows are added by hand.
 
 ## Decisions
 
@@ -89,7 +91,7 @@ Decisions settled in the design discussion:
        queries: list[str]  # the rewrite's output for this turn
        probe: list[RetrievedChunk]
        knowledge: list[RetrievedChunk]  # what the agent answers from
-       search_outcome: str  # "skipped" | "no_user" | "no_match" | "found"
+       search_outcome: str  # "skipped" | "no_match" | "found"
        pending: dict | None  # slice 2: the interrupt payload grade built (Decision 10)
        choice: dict | None  # slice 2: the resume value ask_clarification received
    ```
@@ -97,16 +99,30 @@ Decisions settled in the design discussion:
    - `needs_kb` resets `queries`, `probe`, `knowledge` and `search_outcome` at the start of every new turn, so last turn's chunks never leak into the next answer.
    - Chunks are kept in state (and so in the checkpoint) for one turn only. They are small: the deep search returns at most 8.
 
-4. **Who the asker is, and which collections they search.** Collections belong to app users through `collection_members`; a Chat sender is `users/123` with an optional `email`.
-   - `_handle_mention` adds `email=msg.sender.email` to the `QueueItem`. `ConversationContext` gains `email: str | None`.
-   - The probe and the deep search filter on `chunks.collection_id IN (select collection_id from collection_members join users on … where lower(users.email) = lower(:email) and users.is_active)`, inside the same query, so membership costs no extra round trip.
-   - No email, or an email that matches no active user: `search_outcome = "no_user"` and the agent is told to reply "I can't find a knowledge base linked to your account." No search runs.
-   - The email comes from the Google-authenticated event, never from the model or the message text, the same rule as the space in GH-7.
-   - Logs show the email as they already do for mentions; never chunk content at info level.
+4. **Who the asker is, and which collections they search.** Collections belong to app users through `collection_members`; a Chat sender is `users/123` with an optional `email`. Both come from the event Google signs (the webhook verifies its system ID token), never from the model or the message text, the same rule as the space in GH-7. The Chat user id is the stable key: an email can change or be missing, the id does not.
+   - **Schema.** `users.google_chat_user_id: str | None`, unique and indexed. `users.password_hash` becomes nullable: a user created from Chat has no password, and `authenticate` rejects a user with no hash the same way as a wrong password. One migration for both.
+   - **Resolution.** `resolve_chat_user(db, chat_user_id, email, display_name) -> int | None` in `app/services/user.py`:
+     1. A user with that `google_chat_user_id`: their id if active and their stored email is in an allowed domain, else `None`.
+     2. Otherwise, if the event's email is in an allowed domain, a user with that email (case-insensitive) and no Chat id yet: the Chat id is saved on them, and their id is returned (if active). A user with that email already linked to a different Chat id is not relinked: `None`, logged as a warning.
+     3. Otherwise, if the event's email is in an allowed domain: a new user (`name=display_name`, the email, `password_hash=None`, the Chat id). A unique violation from a concurrent first message rolls back and reads the row again.
+     4. No link, and no email or one outside the allowed domains: `None`, and nothing is created.
+   - **Allowed email domains.** `GOOGLE_CHAT_ALLOWED_EMAIL_DOMAINS` (comma-separated, e.g. `gmail.com` or `example.com,example.org`) in `config.py` and `.env.example`. Matching is exact on the part after the last `@`, case-insensitive, with no subdomains.
+     - Checked on every event, against the stored email for a linked user, so narrowing the setting cuts off users already linked from other domains on their next message.
+     - Empty means no Chat user is accepted, the same fail-closed rule as `GOOGLE_CHAT_AUDIENCE`. API logins are unaffected: the setting only gates Chat.
+     - It limits who gets an app user, not who can message the bot; that is set by the Chat app's visibility in the Google console. With `gmail.com`, any Gmail account that can reach the bot gets a user with no collections.
+   - **Where it runs: a dependency right after verification.** `get_chat_sender(event: VerifiedChatEvent, db: DbSession) -> int | None` in `app/core/deps.py` calls `resolve_chat_user` with `event.chat.user` (the top-level user, present on messages, commands and, in slice 2, clicks). It is a FastAPI dependency, not ASGI middleware: middleware runs before the route verifies the token and would have to parse the body a second time. Persistence stays in the service; the dependency only owns the request's session, like `get_current_user`.
+     - It resolves only events the webhook queues (a message or a command); others (e.g. added to a space) return `None` without a lookup and the route answers `{}` as today.
+     - The route, for a queued kind with no resolved sender: answers `reply(NO_ACCESS_REPLY)` ("Sorry, your account can't use this bot.") and queues nothing. The log line has the Chat user id and the email's domain.
+     - Cost on the webhook: one indexed select, plus one insert on first contact. Google's deadline for an add-on response is far above that.
+   - **What travels.** The router passes `app_user_id` to `process_chat_event(chat, trace_id, app_user_id)` next to the chat payload. `_handle_mention` and `_handle_command` put `user_id` on the `QueueItem`, and `process_item` builds `ConversationContext(user_id=...)`. No email is queued or kept in the context or the graph state. The Chat user id (`users/123`) stays the conversation key, as in GH-7.
+   - **Between webhook and drain.** A user deactivated after their message was queued still finds nothing: the search's membership filter checks `users.is_active` (below). `user_id` is never `None` in the worker, so there is no "no user" path in the graph.
+   - **Searches.** The probe and the deep search filter on `chunks.collection_id IN (select collection_id from collection_members join users on users.id = collection_members.user_id where users.id = :user_id and users.is_active)`, inside the same query, so membership costs no extra round trip.
+   - A newly created user is a member of nothing, so their probe is empty and they get the `no_match` reply until someone adds them to a collection.
+   - Logs show the resolved user id, and `created` / `linked` on the first contact; never chunk content at info level.
 
 5. **The probe: one embedding call, one SQL query.**
    - `rewrite` (chat model, structured output `{"queries": [str, ...]}`, 2–3 items) sees the new message and the 3 messages before it. It writes broader, self-contained queries ("it" resolved from context).
-   - `TaskKnowledgeSearch.probe(email, queries)` embeds all queries in one `embedder.embed(queries)` call, then runs one statement:
+   - `TaskKnowledgeSearch.probe(user_id, queries)` embeds all queries in one `embedder.embed(queries)` call, then runs one statement:
 
      ```sql
      (select c.id, c.document_id, d.title, d.source_uri, c.content,
@@ -128,10 +144,10 @@ Decisions settled in the design discussion:
    - Clear path: reuses the first probe query's vector (kept in memory by `TaskKnowledgeSearch` for the turn, keyed by query text) and searches the documents the grader marked relevant, `k = 8`.
    - Option path (slice 2): embeds `"{original question} — {option label}"` once and searches only that option's `doc_ids`, `k = 8`.
    - Refinement path (slice 3): the same as the option path, with the user's text appended.
-   - `deep_search(db, email, vector, doc_ids, k)` applies the membership filter as well as the doc ids, so a doc id in a stale checkpoint can never reach a collection the user has since left.
+   - `deep_search(db, user_id, vector, doc_ids, k)` applies the membership filter as well as the doc ids, so a doc id in a stale checkpoint can never reach a collection the user has since left.
 
 7. **Persistence stays in services; the graph gets a protocol.** Graph nodes are not entry points, so they never open a session.
-   - `app/services/retrieval.py` defines `RetrievedChunk`, the query functions taking an `AsyncSession` first, and a `KnowledgeSearch` protocol: `probe(email, queries) -> list[RetrievedChunk]` and `deep_search(email, query, doc_ids) -> list[RetrievedChunk]`.
+   - `app/services/retrieval.py` defines `RetrievedChunk`, the query functions taking an `AsyncSession` first, and a `KnowledgeSearch` protocol: `probe(user_id, queries) -> list[RetrievedChunk]` and `deep_search(user_id, query, doc_ids) -> list[RetrievedChunk]`.
    - `TaskKnowledgeSearch` in `app/tasks/conversation.py` implements it, like `TaskConversationLog`: it calls the embedder first and opens `task_session()` only after, for one query each. No session is held during the embedding call or any LLM call.
    - It reaches nodes and the tool through `ConversationContext.search` (runtime context, not state: it is not serializable and the model must not control it). Tests pass a fake.
 
@@ -153,7 +169,7 @@ Decisions settled in the design discussion:
    - An empty probe skips the grader: `no_match` without a model call.
    - Grading stays on the chat model, because it writes the labels and Jev does not generate text.
 
-9. **`search_knowledge` becomes real.** The agent keeps it for follow-ups inside a turn ("and what about X?"). It calls `KnowledgeSearch.deep_search(email, query, doc_ids=None)` and returns the chunks formatted with their titles. It reads the email and the search from runtime context; its schema still has only `query`.
+9. **`search_knowledge` becomes real.** The agent keeps it for follow-ups inside a turn ("and what about X?"). It calls `KnowledgeSearch.deep_search(user_id, query, doc_ids=None)` and returns the chunks formatted with their titles. It reads the user id and the search from runtime context; its schema still has only `query`.
 
 10. **The pause is a LangGraph `interrupt()`.** Buttons make the answer explicit, so pausing the graph and resuming it is the natural model.
     - `ask_clarification` calls `interrupt({"clarification_id": uuid4().hex, "question": str, "options": [...], "asked_at": time.time(), "query": original question})`. The turn ends, and `ainvoke` returns the state with `__interrupt__`.
@@ -236,22 +252,22 @@ def get_model(role: Role) -> BaseChatModel:
 
 ```python
 class KnowledgeSearch(Protocol):
-    async def probe(self, email: str, queries: list[str]) -> list[RetrievedChunk]: ...
+    async def probe(self, user_id: int, queries: list[str]) -> list[RetrievedChunk]: ...
     async def deep_search(
-        self, email: str, query: str, doc_ids: list[int] | None
+        self, user_id: int, query: str, doc_ids: list[int] | None
     ) -> list[RetrievedChunk]: ...
 
 
-def _member_collections(email: str):
+def _member_collections(user_id: int):
     return (
         select(CollectionMember.collection_id)
         .join(User, User.id == CollectionMember.user_id)
-        .where(func.lower(User.email) == email.lower(), User.is_active)
+        .where(User.id == user_id, User.is_active)
     )
 
 
 async def probe(
-    db: AsyncSession, email: str, vectors: list[list[float]], k: int = PROBE_K
+    db: AsyncSession, user_id: int, vectors: list[list[float]], k: int = PROBE_K
 ) -> list[RetrievedChunk]:
     """Every query's nearest chunks in one round trip; each branch keeps its own index scan."""
     branches = [
@@ -264,7 +280,7 @@ async def probe(
             Chunk.embedding.cosine_distance(v).label("distance"),
         )
         .join(Document)
-        .where(Chunk.collection_id.in_(_member_collections(email)), Chunk.embedding.is_not(None))
+        .where(Chunk.collection_id.in_(_member_collections(user_id)), Chunk.embedding.is_not(None))
         .order_by(Chunk.embedding.cosine_distance(v))
         .limit(k)
         .subquery()
@@ -273,9 +289,39 @@ async def probe(
     ]
     rows = (await db.execute(union_all(*branches))).all()
     return _dedup(rows)
+```
+
+`app/services/user.py`
+
+```python
+async def resolve_chat_user(
+    db: AsyncSession, chat_user_id: str, email: str | None, display_name: str
+) -> int | None:
+    """The app user behind a Chat sender: linked by Chat id, else by email once, else created."""
+    user = await _by_chat_id(db, chat_user_id)
+    if user is None and email and _domain_allowed(email):
+        user = await _by_email(db, email)
+        if user is not None and user.google_chat_user_id not in (None, chat_user_id):
+            logger.warning(f"email already linked to another chat user user_id={user.id}")
+            return None
+        try:
+            if user is None:
+                user = User(name=display_name, email=email.lower(), password_hash=None)
+                db.add(user)
+            user.google_chat_user_id = chat_user_id
+            await db.commit()
+        except IntegrityError:  # a concurrent first message linked or created it
+            await db.rollback()
+            user = await _by_chat_id(db, chat_user_id)
+    if user is None or not user.is_active or not _domain_allowed(user.email):
+        return None
+    return user.id
 
 
-async def user_exists(db: AsyncSession, email: str) -> bool: ...  # for the "no_user" outcome
+def _domain_allowed(email: str) -> bool:
+    # exact match on the part after the last "@"; no subdomains; empty setting = nobody
+    domain = email.rpartition("@")[2].lower()
+    return domain in _allowed_domains()  # parsed from GOOGLE_CHAT_ALLOWED_EMAIL_DOMAINS
 ```
 
 `app/agent/graph.py` (shape)
@@ -352,24 +398,30 @@ LLM_CLASSIFY_MODEL=
 
 | File | Slice | Purpose |
 |------|-------|---------|
-| `app/core/config.py`, `.env.example` | 1 | `LLM_CLASSIFY_MODEL` |
+| `app/core/config.py`, `.env.example` | 1 | `LLM_CLASSIFY_MODEL`, `GOOGLE_CHAT_ALLOWED_EMAIL_DOMAINS` |
 | `app/agent/models.py` | 1 | `classify` role |
-| `app/agent/state.py` | 1, 2 | Retrieval fields, `ConversationContext.email` and `.search` (1); pending clarification (2) |
+| `app/models/user.py`, `alembic/versions/` | 1 | `google_chat_user_id`, nullable `password_hash` |
+| `app/services/user.py` | 1 | `resolve_chat_user`; `authenticate` rejects a user with no password |
+| `app/agent/state.py` | 1, 2 | Retrieval fields, `ConversationContext.user_id` (replacing `.email`) and `.search` (1); pending clarification (2) |
 | `app/agent/graph.py` | 1, 2, 3 | Retrieval nodes (1); `ask_clarification`, `resolve_choice` for clicks (2); typed replies, expiry (3) |
 | `app/agent/nodes/retrieval.py` | 1, 2, 3 | Node functions and their structured-output models, kept out of `graph.py` |
 | `app/agent/prompts.py` | 1 | Retrieved chunks and the search outcome in the system prompt |
 | `app/agent/tools/knowledge.py` | 1 | Real `search_knowledge` |
-| `app/services/retrieval.py` | 1 | `RetrievedChunk`, `probe`, `deep_search`, `user_exists`, `KnowledgeSearch` |
-| `app/services/conversation_queue.py` | 1, 2 | `QueueItem.email` (1); `kind="choice"`, `clarification_id`, `option` (2) |
-| `app/services/conversation.py` | 2, 3 | `TurnResult`, resume logic, card post, card name in Redis (2); typed resume, card edits (3) |
+| `app/services/retrieval.py` | 1 | `RetrievedChunk`, `probe`, `deep_search`, `KnowledgeSearch` |
+| `app/core/deps.py` | 1 | `get_chat_sender` (`VerifiedChatSender`) |
+| `app/services/conversation_queue.py` | 1, 2 | `QueueItem.user_id` (1); `kind="choice"`, `clarification_id`, `option` (2) |
+| `app/services/conversation.py` | 1, 2, 3 | `ConversationContext.user_id` from the item (1); `TurnResult`, resume logic, card post, card name in Redis (2); typed resume, card edits (3) |
+| `app/tasks/google_chat.py` | 1 | `process_chat_event` takes `app_user_id` |
 | `app/tasks/conversation.py` | 1 | `TaskKnowledgeSearch` |
 | `app/core/google_chat_client.py` | 2 | `create_card_message`, `update_message` |
-| `app/services/google_chat.py` | 1, 2 | Email on the item (1); `_handle_click`, `send_card`, `edit_card`, click response (2) |
+| `app/services/google_chat.py` | 1, 2 | `user_id` on the item, `NO_ACCESS_REPLY` (1); `_handle_click`, `send_card`, `edit_card`, click response (2) |
 | `app/schemas/google_chat.py` | 2 | `ButtonClickedPayload`, `action_parameters` |
-| `app/routers/ingest.py` | 2 | Click events queued with their parameters; click response |
+| `app/routers/ingest.py` | 1, 2 | Sender dependency, no-access reply, `app_user_id` to the task (1); click events queued with their parameters, click response (2) |
 | `tests/agent_helpers.py` | 1 | Fake `KnowledgeSearch`, scripted structured outputs for the fake models |
 | `tests/unit/test_retrieval_graph.py` | 1, 2, 3 | Graph routing, grading validation, pause / resume |
-| `tests/unit/test_retrieval_service.py` | 1 | Membership lookup and `user_exists` under SQLite (the vector query itself is manual) |
+| `tests/unit/test_chat_identity.py` | 1 | `resolve_chat_user` under SQLite; login refused with no password |
+| `tests/integration/test_google_chat_webhook.py` | 1 | Sender dependency: no-access reply and nothing queued; `app_user_id` reaches the task |
+| `tests/unit/test_retrieval_service.py` | 1 | Membership lookup under SQLite (the vector query itself is manual) |
 | `tests/unit/test_google_chat_task.py`, `tests/integration/test_google_chat_webhook.py` | 2 | Click intake, asker check, response shape |
 | `tests/fixtures/` | 2 | A captured `buttonClickedPayload` event (scrubbed) |
 | `docs/wiki/retrieval.md`, `docs/wiki/conversation.md`, `docs/wiki/google-bot.md`, `docs/wiki/index.md` | 4 | Docs |
@@ -385,15 +437,18 @@ No test calls an LLM, Google, Redis, or pgvector.
 
 **Slice 1**
 - Small talk (`needs_kb=false`): no rewrite, no search, the agent answers.
-- No email, or an email with no active user: no search, the "can't find a knowledge base" reply.
+- `resolve_chat_user` under SQLite: a linked Chat id returns its user; first contact with a known email (any case) links it and saves the Chat id; an unknown email creates a user with no password, who then cannot log in; an email linked to another Chat id returns `None` and is not relinked; an inactive user returns `None`; no link and no email returns `None` and creates nothing; a second call for the same sender creates no second user.
+- Allowed domains: an email outside them (including a subdomain, and with the setting empty) creates and links nothing; matching ignores case; a linked user whose domain is later removed from the setting returns `None`; a comma list with spaces parses.
+- Webhook: a mention or command from an accepted sender dispatches `process_chat_event` with their `app_user_id`; from a rejected sender (outside the domains, inactive, no email and not linked) it answers `NO_ACCESS_REPLY` and dispatches nothing; an event with nothing to queue does no lookup and answers `{}`; the email is not in the task payload's top level and not on the queue item.
+- `process_item`: the item's `user_id` reaches the context.
 - Empty probe: no grade call, the "couldn't find anything" reply.
 - `clear`: one probe call carrying every rewritten query, one deep search on the graded doc ids, the chunks are in the agent's system prompt, the reply is posted.
 - `ambiguous` (slice 1 only): handled as `clear`.
 - Grade output with an unknown doc id: the id is dropped; `clear` left with no ids becomes `no_match`.
 - The next turn starts with empty `knowledge`.
-- `search_knowledge` passes the email from context, never one from the model; its schema has only `query`.
+- `search_knowledge` passes the user id from context, never one from the model; its schema has only `query`.
 - A search error (embedder or DB) ends in the apology, and the retry path is the same as for model errors.
-- `user_exists` and `_member_collections` under SQLite: a member sees their collections, a non-member does not, matching is case-insensitive, an inactive user matches nothing.
+- `_member_collections` under SQLite: a member sees their collections, a non-member does not, an inactive user matches nothing.
 
 **Slice 2**
 - `ambiguous` with 2 options: the drain posts a card with 2 buttons plus "None of these", the thread has a pending interrupt, and there is no text reply.
@@ -420,12 +475,13 @@ No test calls an LLM, Google, Redis, or pgvector.
 
 - `uv run ruff check . && uv run ruff format --check . && uv run pytest`
 - Manual, with `make dev` + `make worker` behind the tunnel, Postgres with pgvector, and `LLM_CLASSIFY_MODEL=typesafe/jev-router`:
-  1. Ingest two unrelated pages into a collection your Chat account's email is a member of. Ask about one of them. The reply cites it, and no card appears.
+  1. Ingest two unrelated pages into a collection whose member has your Chat account's email. Ask about one of them. The reply cites it, no card appears, and `users.google_chat_user_id` is now set for that user.
   2. In psql, `EXPLAIN` the probe statement from the worker's debug log. Each `UNION ALL` branch uses `ix_chunks_embedding_hnsw`.
   3. Ask "hi". The worker log shows `needs_kb=false` and no search.
-  4. A Chat account whose email is not a user gets "I can't find a knowledge base linked to your account."
-  5. Ingest two pages on related topics and ask a broad question. A card with 2–3 buttons appears. Click one: the buttons change to "Looking into: …", and the answer comes from that page.
-  6. A second account clicks a button on the first account's card. Nothing happens.
-  7. Ask an ambiguous question and type "2". Then repeat and type something unrelated: it is answered as new, and the old card reads "This question was skipped."
-  8. Ask an ambiguous question, wait 30 minutes and click. The bot replies that the question has expired.
-  9. Capture a real `buttonClickedPayload` event (from the worker log at debug level), scrub it, and compare it with the test fixture.
+  4. A Chat account whose email is not a user: its first mention creates a user with no password and gets "I couldn't find anything about that in your knowledge base." `POST /auth/login` with that email fails. Deactivate the user and ask again: "Sorry, your account can't use this bot.", and nothing is queued.
+  5. Set `GOOGLE_CHAT_ALLOWED_EMAIL_DOMAINS` to a domain your account is not in and restart the API. Ask again: the same no-access reply, and no new row in `users`.
+  6. Ingest two pages on related topics and ask a broad question. A card with 2–3 buttons appears. Click one: the buttons change to "Looking into: …", and the answer comes from that page.
+  7. A second account clicks a button on the first account's card. Nothing happens.
+  8. Ask an ambiguous question and type "2". Then repeat and type something unrelated: it is answered as new, and the old card reads "This question was skipped."
+  9. Ask an ambiguous question, wait 30 minutes and click. The bot replies that the question has expired.
+  10. Capture a real `buttonClickedPayload` event (from the worker log at debug level), scrub it, and compare it with the test fixture.
