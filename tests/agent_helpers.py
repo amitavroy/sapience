@@ -6,9 +6,11 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 
 
 class FakeChatModel(BaseChatModel):
-    """Answers from `replies` in order (repeating the last) and records every prompt."""
+    """Answers from `replies` in order (repeating the last) and records every prompt.
 
-    replies: list[str] = ["ok"]
+    A reply is text, or a ready AIMessage when the turn needs `tool_calls`."""
+
+    replies: list[str | AIMessage] = ["ok"]
     calls: list[list[BaseMessage]] = []
 
     @property
@@ -18,7 +20,8 @@ class FakeChatModel(BaseChatModel):
     def _generate(self, messages, stop=None, run_manager=None, **kwargs) -> ChatResult:
         self.calls.append(list(messages))
         reply = self.replies[min(len(self.calls), len(self.replies)) - 1]
-        return ChatResult(generations=[ChatGeneration(message=AIMessage(reply))])
+        message = reply if isinstance(reply, AIMessage) else AIMessage(reply)
+        return ChatResult(generations=[ChatGeneration(message=message)])
 
     def bind_tools(self, tools, **kwargs):
         return self

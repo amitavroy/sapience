@@ -6,6 +6,7 @@ from langgraph.graph.state import CompiledStateGraph
 from app.agent.models import get_model
 from app.agent.prompts import system_prompt
 from app.agent.state import ConversationContext, ConversationState
+from app.agent.tools import TOOLS
 
 MAX_REPLY_CHARS = 8000
 TRUNCATED_SUFFIX = "… (truncated)"
@@ -21,7 +22,7 @@ def finalize(state: ConversationState) -> dict:
 def build_graph(checkpointer: BaseCheckpointSaver) -> CompiledStateGraph:
     agent = create_agent(
         model=get_model("chat"),
-        tools=[],
+        tools=TOOLS,
         context_schema=ConversationContext,
         middleware=[system_prompt],
     )

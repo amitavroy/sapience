@@ -6,6 +6,7 @@ from app.agent import graph as graph_module
 from app.agent.graph import MAX_REPLY_CHARS, TRUNCATED_SUFFIX, build_graph, finalize
 from app.agent.models import ConversationError, get_model
 from app.agent.state import ConversationContext
+from app.agent.tools.knowledge import NO_KNOWLEDGE, search_knowledge
 from app.core.config import settings
 from app.services.conversation import run_turn, thread_id
 from tests.agent_helpers import FakeChatModel
@@ -104,3 +105,34 @@ def test_each_model_gets_its_own_http_client(monkeypatch: pytest.MonkeyPatch) ->
 
     assert first is not second
     assert first.root_async_client._client is not second.root_async_client._client
+
+
+def _search_call(query: str) -> AIMessage:
+    return AIMessage(
+        "", tool_calls=[{"name": "search_knowledge", "args": {"query": query}, "id": "call-1"}]
+    )
+
+
+async def test_tool_call_runs_with_the_space_from_context(
+    monkeypatch: pytest.MonkeyPatch, model: FakeChatModel, graph
+) -> None:
+    model.replies = [_search_call("onboarding"), "Nothing connected yet"]
+    seen: list[tuple[str, str]] = []
+    original = search_knowledge.func
+
+    def spy(query, runtime):
+        seen.append((query, runtime.context.space))
+        return original(query, runtime)
+
+    monkeypatch.setattr(search_knowledge, "func", spy)
+
+    reply = await run_turn(graph, ANN, "spaces/A/messages/1", "what is our onboarding?")
+
+    assert reply == "Nothing connected yet"
+    assert seen == [("onboarding", "spaces/A")]
+    result = model.calls[1][-1]  # the tool output is what the model sees next
+    assert (result.type, result.text) == ("tool", NO_KNOWLEDGE)
+
+
+def test_search_knowledge_exposes_only_the_query_to_the_model() -> None:
+    assert set(search_knowledge.tool_call_schema.model_json_schema()["properties"]) == {"query"}
