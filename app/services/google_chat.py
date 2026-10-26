@@ -17,6 +17,14 @@ DM_REPLY = "I only work in spaces. Mention me in a space."
 EMPTY_REPLY = "Ask me something after the mention."
 FAILURE_REPLY = "Sorry, something went wrong. Please try again."
 RESET_REPLY = "Conversation cleared."
+NO_ACCESS_REPLY = "Sorry, your account can't use this bot."
+
+
+def is_queued(chat: ChatPayload | None) -> bool:
+    """A message or a command; anything else (e.g. added to a space) has nothing to queue."""
+    return chat is not None and (
+        chat.message_payload is not None or chat.app_command_payload is not None
+    )
 
 
 def reply(text: str) -> dict:

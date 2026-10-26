@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     google_chat_credentials_file: str = ""
     # command ID registered for /reset in the Chat API console; 0 = not configured
     google_chat_reset_command_id: int = 0
+    # comma-separated email domains whose Chat senders get an app user (exact, no subdomains);
+    # empty = no Chat sender is accepted
+    google_chat_allowed_email_domains: str = ""
     # web page crawler
     crawler_user_agent: str = (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
@@ -66,6 +69,14 @@ class Settings(BaseSettings):
             for p in self.trusted_proxies.split(",")
             if p.strip()
         ]
+
+    @property
+    def chat_allowed_email_domains(self) -> set[str]:
+        return {
+            d.strip().lower()
+            for d in self.google_chat_allowed_email_domains.split(",")
+            if d.strip()
+        }
 
 
 settings = Settings()

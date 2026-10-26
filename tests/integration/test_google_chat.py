@@ -3,9 +3,13 @@ from collections.abc import Callable
 
 import httpx
 import pytest
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.services.google_chat import ACK, reply
+from app.models.user import User
+from app.services import user as user_service
+from app.services.google_chat import ACK, NO_ACCESS_REPLY, reply
 from tests.google_chat_helpers import CHAT_FIXTURES, SLASH_FIXTURE, load_fixture
 
 Sign = Callable[..., str]
@@ -144,4 +148,94 @@ async def test_unconfigured_audience_rejects_everything(
     )
 
     assert response.status_code == 401
+    assert dispatched == []
+
+
+async def test_first_mention_creates_the_sender_as_a_user(
+    chat_client: httpx.AsyncClient,
+    sign_google_token: Sign,
+    dispatched: list[tuple],
+    db_session: AsyncSession,
+) -> None:
+    response = await chat_client.post(
+        "/ingest/google-chat", json=signed_event(CHAT_FIXTURES[0], sign_google_token())
+    )
+
+    assert response.json() == reply(ACK)
+    user = await user_service.get_by_email(db_session, "ann@example.com")
+    assert (user.google_chat_user_id, user.password_hash) == ("users/1001", None)
+    assert len(dispatched) == 1
+
+
+@pytest.mark.parametrize("name", [CHAT_FIXTURES[0], SLASH_FIXTURE])
+@pytest.mark.parametrize(
+    "reject",
+    [
+        lambda e, m: m.setattr(settings, "google_chat_allowed_email_domains", "example.org"),
+        lambda e, m: m.setattr(settings, "google_chat_allowed_email_domains", ""),
+        lambda e, m: e["chat"]["user"].pop("email"),
+    ],
+    ids=["outside-domains", "no-domains", "no-email-not-linked"],
+)
+async def test_rejected_sender_gets_no_access_and_nothing_is_queued(
+    chat_client: httpx.AsyncClient,
+    sign_google_token: Sign,
+    dispatched: list[tuple],
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    name: str,
+    reject: Callable,
+) -> None:
+    event = signed_event(name, sign_google_token())
+    reject(event, monkeypatch)
+
+    response = await chat_client.post("/ingest/google-chat", json=event)
+
+    assert response.status_code == 200
+    assert response.json() == reply(NO_ACCESS_REPLY)
+    assert dispatched == []
+    assert await db_session.scalar(select(func.count()).select_from(User)) == 0
+
+
+async def test_inactive_sender_gets_no_access(
+    chat_client: httpx.AsyncClient,
+    sign_google_token: Sign,
+    dispatched: list[tuple],
+    db_session: AsyncSession,
+) -> None:
+    db_session.add(
+        User(
+            name="Ann",
+            email="ann@example.com",
+            password_hash="x",
+            google_chat_user_id="users/1001",
+            is_active=False,
+        )
+    )
+    await db_session.commit()
+
+    response = await chat_client.post(
+        "/ingest/google-chat", json=signed_event(CHAT_FIXTURES[0], sign_google_token())
+    )
+
+    assert response.json() == reply(NO_ACCESS_REPLY)
+    assert dispatched == []
+
+
+async def test_event_with_nothing_to_queue_does_no_lookup(
+    chat_client: httpx.AsyncClient,
+    sign_google_token: Sign,
+    dispatched: list[tuple],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def no_lookup(*args) -> None:
+        raise AssertionError("sender resolved for an event with nothing to queue")
+
+    monkeypatch.setattr(user_service, "resolve_chat_user", no_lookup)
+    event = signed_event(CHAT_FIXTURES[0], sign_google_token())
+    del event["chat"]["messagePayload"]
+
+    response = await chat_client.post("/ingest/google-chat", json=event)
+
+    assert response.json() == {}
     assert dispatched == []

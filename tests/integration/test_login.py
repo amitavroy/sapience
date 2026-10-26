@@ -37,3 +37,13 @@ async def test_bad_credentials_401(client: httpx.AsyncClient, email: str, passwo
     r = await login(client, email, password)
     assert r.status_code == 401
     assert r.json()["detail"] == "Incorrect email or password"
+
+
+async def test_user_created_from_chat_cannot_log_in(
+    client: httpx.AsyncClient, db_session: AsyncSession
+):
+    db_session.add(User(name="Ann", email="ann@example.com", password_hash=None))
+    await db_session.commit()
+
+    for password in ("", "anything"):
+        assert (await login(client, "ann@example.com", password)).status_code == 401

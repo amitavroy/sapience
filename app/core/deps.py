@@ -13,6 +13,7 @@ from app.core.security import decode_token
 from app.db.session import async_session_factory
 from app.models.user import User
 from app.schemas.google_chat import GoogleChatEvent
+from app.services import google_chat as google_chat_service
 from app.services import user as user_service
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -63,3 +64,16 @@ async def get_verified_chat_event(request: Request, verifier: Verifier) -> Googl
 
 
 VerifiedChatEvent = Annotated[GoogleChatEvent, Depends(get_verified_chat_event)]
+
+
+async def get_chat_sender(event: VerifiedChatEvent, db: DbSession) -> int | None:
+    """The app user id behind a verified event's sender; None = rejected or nothing to queue."""
+    chat = event.chat
+    if not google_chat_service.is_queued(chat) or chat.user is None:
+        return None
+    return await user_service.resolve_chat_user(
+        db, chat.user.name, chat.user.email, chat.user.display_name or chat.user.name
+    )
+
+
+VerifiedChatSender = Annotated[int | None, Depends(get_chat_sender)]

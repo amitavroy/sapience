@@ -112,6 +112,7 @@ async def google_verifier(jwks: JwksServer) -> AsyncIterator[GoogleTokenVerifier
 def google_settings(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     monkeypatch.setattr(settings, "google_chat_audience", GOOGLE_AUDIENCE)
     monkeypatch.setattr(settings, "google_chat_service_account_email", GOOGLE_EMAIL)
+    monkeypatch.setattr(settings, "google_chat_allowed_email_domains", "example.com")  # fixtures
     return SimpleNamespace(audience=GOOGLE_AUDIENCE, email=GOOGLE_EMAIL)
 
 
