@@ -1,8 +1,13 @@
 """Agent test helpers: a scripted chat model that records what it was asked."""
 
+from typing import Any
+
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
+from langchain_core.runnables import RunnableLambda
+
+from app.services.retrieval import RetrievedChunk
 
 
 class FakeChatModel(BaseChatModel):
@@ -12,6 +17,9 @@ class FakeChatModel(BaseChatModel):
 
     replies: list[str | AIMessage] = ["ok"]
     calls: list[list[BaseMessage]] = []
+    # with_structured_output answers: the object (or an exception to raise) by schema class name
+    structured: dict[str, Any] = {}
+    structured_calls: list[tuple[str, list[BaseMessage]]] = []
 
     @property
     def _llm_type(self) -> str:
@@ -25,6 +33,58 @@ class FakeChatModel(BaseChatModel):
 
     def bind_tools(self, tools, **kwargs):
         return self
+
+    def with_structured_output(self, schema, **kwargs):
+        name = schema.__name__
+
+        async def answer(messages):
+            self.structured_calls.append((name, list(messages)))
+            result = self.structured[name]
+            if isinstance(result, Exception):
+                raise result
+            return result
+
+        return RunnableLambda(answer)
+
+
+def make_chunk(document_id: int, content: str = "body", title: str = "Doc") -> RetrievedChunk:
+    return RetrievedChunk(
+        chunk_id=document_id * 10,
+        document_id=document_id,
+        title=title,
+        source_uri=f"https://example.com/{document_id}",
+        content=content,
+        distance=0.1,
+    )
+
+
+class FakeSearch:
+    """A KnowledgeSearch that records its calls and returns fixed chunks."""
+
+    def __init__(
+        self,
+        probe: list[RetrievedChunk] | None = None,
+        deep: list[RetrievedChunk] | None = None,
+        error: Exception | None = None,
+    ) -> None:
+        self.probe_result = probe or []
+        self.deep_result = deep or []
+        self.error = error
+        self.calls: list[tuple] = []
+
+    async def probe(self, user_id: int, queries: list[str]) -> list[RetrievedChunk]:
+        self.calls.append(("probe", user_id, queries))
+        if self.error:
+            raise self.error
+        return self.probe_result
+
+    async def deep_search(
+        self, user_id: int, query: str, doc_ids: list[int] | None
+    ) -> list[RetrievedChunk]:
+        self.calls.append(("deep", user_id, query, doc_ids))
+        if self.error:
+            raise self.error
+        return self.deep_result
 
 
 class FakeChat:
