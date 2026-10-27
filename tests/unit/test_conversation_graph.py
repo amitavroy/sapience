@@ -139,13 +139,13 @@ async def test_tool_call_runs_with_the_space_from_context(
 ) -> None:
     model.replies = [_search_call("onboarding"), "Nothing connected yet"]
     seen: list[tuple[str, str]] = []
-    original = search_knowledge.func
+    original = search_knowledge.coroutine
 
-    def spy(query, runtime):
+    async def spy(query, runtime):
         seen.append((query, runtime.context.space))
-        return original(query, runtime)
+        return await original(query, runtime)
 
-    monkeypatch.setattr(search_knowledge, "func", spy)
+    monkeypatch.setattr(search_knowledge, "coroutine", spy)
 
     reply = await run_turn(graph, ANN, "spaces/A/messages/1", "what is our onboarding?")
 
