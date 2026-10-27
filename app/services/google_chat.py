@@ -1,3 +1,4 @@
+import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -36,8 +37,30 @@ def reply(text: str) -> dict:
     }
 
 
+_FENCE = re.compile(r"```[^\n`]*\n?(.*?)```", re.DOTALL)
+_HEADING = re.compile(r"^#{1,6}\s+(.+?)\s*#*$", re.MULTILINE)
+_BOLD = re.compile(r"\*\*(.+?)\*\*|__(.+?)__")
+_LINK = re.compile(r"\[([^\]]+)\]\((https?://[^)\s]+)\)")
+
+
+def to_chat_markup(text: str) -> str:
+    """Markdown the model writes, as the markup Chat renders (*bold*, <url|text>, plain fences).
+
+    Code fences are copied as they are, except the language label, which Chat would show.
+    """
+    parts = re.split(r"(```.*?```)", text, flags=re.DOTALL)
+    for i, part in enumerate(parts):
+        if part.startswith("```"):
+            parts[i] = _FENCE.sub(lambda m: f"```\n{m.group(1).strip(chr(10))}\n```", part)
+            continue
+        part = _HEADING.sub(r"*\1*", part)
+        part = _BOLD.sub(lambda m: f"*{m.group(1) or m.group(2)}*", part)
+        parts[i] = _LINK.sub(r"<\2|\1>", part)
+    return "".join(parts)
+
+
 async def send_message(client: GoogleChatClient, space: str, text: str) -> str:
-    name = await client.create_message(space, text)
+    name = await client.create_message(space, to_chat_markup(text))
     logger.info(f"google chat sent space={space} message={name}")
     return name
 

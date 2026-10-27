@@ -22,8 +22,10 @@ MAX_DOCS = 3  # documents the deep search covers when the probe is ambiguous (un
 
 NEEDS_KB_PROMPT = """\
 Decide whether the user's last message needs a search of the team's knowledge base (documents \
-and web pages they ingested). Greetings, thanks, small talk and questions about the \
-conversation itself do not."""
+and web pages they ingested). Answer true for any question or request for information, \
+instructions or advice, even a general-sounding "how do I ..." one: the answers come from \
+the knowledge base, never from general knowledge. Answer false only for greetings, thanks, \
+small talk and questions about the conversation itself."""
 
 REWRITE_PROMPT = """\
 Write 2 or 3 search queries for the user's last message. Use the earlier messages to resolve \

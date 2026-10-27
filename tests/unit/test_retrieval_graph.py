@@ -94,7 +94,10 @@ async def test_empty_probe_is_no_match_without_a_grade_call(graph, chat_model) -
 
     assert structured_names(chat_model) == ["Rewrite"]
     assert [c[0] for c in search.calls] == ["probe"]
-    assert "found nothing relevant" in system_text(chat_model)
+    prompt = system_text(chat_model)
+    assert "found nothing relevant" in prompt
+    assert "Do not answer from memory" in prompt
+    assert "Sources:" not in prompt
 
 
 async def test_clear_probes_once_then_searches_the_graded_documents(graph, chat_model) -> None:
@@ -112,6 +115,9 @@ async def test_clear_probes_once_then_searches_the_graded_documents(graph, chat_
     assert "Refunds take 5 days" in prompt
     assert "https://example.com/1" in prompt
     assert "Shipping takes 2 days" not in prompt
+    # grounded answers that cite the documents they used
+    assert "Sources:" in prompt
+    assert "only from them" in prompt
 
 
 async def test_grade_sees_the_probe_chunks_with_ids(graph, chat_model) -> None:

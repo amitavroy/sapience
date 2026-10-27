@@ -13,21 +13,36 @@ Be concise. Format for Google Chat: *bold*, _italic_, `code`, and simple bullet 
 Do not use Markdown headings or tables.
 
 For questions about the team's knowledge or documents, use the search_knowledge tool \
-if you have it. If you don't know something, say so.\
+if you have it. Answer such questions only from the knowledge base excerpts you were given \
+or the tool returned, never from your own general knowledge. Greetings and small talk are \
+fine. If the excerpts don't cover something, say so.\
+"""
+
+SOURCES_RULE = """\
+End every answer that uses the excerpts with a "Sources:" list of the documents whose \
+excerpts you actually used, one per line, as <url|title> when the excerpt has a link and \
+the plain title when it doesn't. Don't list documents you didn't use.\
 """
 
 
-FOUND = """
+FOUND = (
+    """
 
-Excerpts from the user's knowledge base follow. Answer from them and name the source of what \
-you use. If they don't answer the question, say so.
+Excerpts from the user's knowledge base follow. Answer only from them: don't add facts, \
+advice or recommendations that are not in the excerpts. If they don't answer the question, \
+say you couldn't find that in the knowledge base and stop.
 
-{knowledge}"""
+{knowledge}
+
+"""
+    + SOURCES_RULE
+)
 
 NO_MATCH = """
 
-A search of the user's knowledge base found nothing relevant to this question. Say you \
-couldn't find anything about it in their knowledge base; don't answer it from memory."""
+A search of the user's knowledge base found nothing relevant to this question. Reply only \
+that you couldn't find anything about it in their knowledge base, and offer to help if they \
+can rephrase. Do not answer from memory, and give no general advice, tips or suggestions."""
 
 
 @dynamic_prompt
