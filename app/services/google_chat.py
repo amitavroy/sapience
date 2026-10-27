@@ -42,12 +42,12 @@ async def send_message(client: GoogleChatClient, space: str, text: str) -> str:
     return name
 
 
-async def handle_event(chat: ChatPayload) -> None:
+async def handle_event(chat: ChatPayload, app_user_id: int) -> None:
     """Runs in the worker. Decides what kind of event this is and delegates."""
     if chat.message_payload is not None:
-        await _handle_mention(chat.message_payload)
+        await _handle_mention(chat.message_payload, app_user_id)
     elif chat.app_command_payload is not None:
-        await _handle_command(chat.app_command_payload)
+        await _handle_command(chat.app_command_payload, app_user_id)
     # anything else (e.g. added to a space): nothing to process
 
 
@@ -58,7 +58,7 @@ async def open_chat_client() -> AsyncIterator[GoogleChatClient]:
         yield GoogleChatClient(http, settings.google_chat_credentials_file)
 
 
-async def _handle_mention(payload: MessagePayload) -> None:
+async def _handle_mention(payload: MessagePayload, app_user_id: int) -> None:
     """Queue a mention for the conversation agent; DMs and empty mentions get a short reply."""
     msg = payload.message
     space = payload.space.name
@@ -79,7 +79,7 @@ async def _handle_mention(payload: MessagePayload) -> None:
         message_name=msg.name,
         text=text,
         display_name=msg.sender.display_name or msg.sender.name,
-        email=msg.sender.email,
+        user_id=app_user_id,
         trace_id=trace_id.get(),
     )
     async with conversation_queue.open_redis() as redis:
@@ -90,7 +90,7 @@ async def _handle_mention(payload: MessagePayload) -> None:
     await dispatch(conversation_tasks.drain_conversation, space, item.user, item.trace_id)
 
 
-async def _handle_command(payload: AppCommandPayload) -> None:
+async def _handle_command(payload: AppCommandPayload, app_user_id: int) -> None:
     """/reset goes through the conversation queue; other commands are only logged for now."""
     msg = payload.message
     sender = msg.sender.email if msg.sender else None
@@ -108,6 +108,7 @@ async def _handle_command(payload: AppCommandPayload) -> None:
         user=msg.sender.name,
         message_name=msg.name,
         display_name=msg.sender.display_name or msg.sender.name,
+        user_id=app_user_id,
         trace_id=trace_id.get(),
     )
     # queued like a message, so a turn that is mid-run is not raced and earlier messages

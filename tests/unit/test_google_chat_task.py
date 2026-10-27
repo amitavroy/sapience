@@ -60,7 +60,7 @@ def chat_messages(records: list[dict]) -> list[str]:
 async def test_handle_event_logs_space_sender_and_stripped_text(
     logs: list[dict], name: str, space: str, text: str
 ) -> None:
-    await handle_event(ChatPayload.model_validate(load_fixture(name)["chat"]))
+    await handle_event(ChatPayload.model_validate(load_fixture(name)["chat"]), 7)
 
     assert chat_messages(logs) == [
         f"google chat message space={space} sender=ann@example.com text={text}"
@@ -68,7 +68,7 @@ async def test_handle_event_logs_space_sender_and_stripped_text(
 
 
 async def test_handle_event_logs_slash_command_not_a_message(logs: list[dict]) -> None:
-    await handle_event(ChatPayload.model_validate(load_fixture(SLASH_FIXTURE)["chat"]))
+    await handle_event(ChatPayload.model_validate(load_fixture(SLASH_FIXTURE)["chat"]), 7)
 
     assert chat_messages(logs) == []
     assert [r["message"] for r in logs] == [
@@ -80,7 +80,7 @@ async def test_handle_event_ignores_event_without_a_message(logs: list[dict]) ->
     chat = load_fixture(SPACE)["chat"]
     del chat["messagePayload"]
 
-    await handle_event(ChatPayload.model_validate(chat))
+    await handle_event(ChatPayload.model_validate(chat), 7)
 
     assert chat_messages(logs) == []
 
@@ -88,14 +88,14 @@ async def test_handle_event_ignores_event_without_a_message(logs: list[dict]) ->
 async def test_handle_event_logs_nothing_for_a_payload_with_neither_message_nor_command(
     logs: list[dict],
 ) -> None:
-    await handle_event(ChatPayload())
+    await handle_event(ChatPayload(), 7)
 
     assert logs == []
 
 
 def test_task_runs_handle_event_under_the_request_trace_id(logs: list[dict]) -> None:
     # sync test: the task drives its async body with asyncio.run, like the real worker
-    process_chat_event(load_fixture(SPACE)["chat"], "trace1234")
+    process_chat_event(load_fixture(SPACE)["chat"], "trace1234", 7)
 
     [record] = [r for r in logs if r["message"].startswith("google chat message")]
     assert record["extra"] == {"trace_id": "trace1234", "job": "process_chat_event"}
@@ -110,7 +110,7 @@ async def test_mention_in_a_space_is_queued_and_a_drain_dispatched(
 ) -> None:
     token = trace_var.set("trace-abc")
     try:
-        await handle_event(ChatPayload.model_validate(load_fixture(SPACE)["chat"]))
+        await handle_event(ChatPayload.model_validate(load_fixture(SPACE)["chat"]), 7)
     finally:
         trace_var.reset(token)
 
@@ -122,7 +122,7 @@ async def test_mention_in_a_space_is_queued_and_a_drain_dispatched(
         "message_name": "spaces/AAAAAAAAAAA/messages/MSG1.MSG1",
         "text": "hi",
         "display_name": "Ann Example",
-        "email": "ann@example.com",
+        "user_id": 7,
         "trace_id": "trace-abc",
         "enqueued_at": 0,
     }
@@ -130,16 +130,14 @@ async def test_mention_in_a_space_is_queued_and_a_drain_dispatched(
     assert fake_chat.sent == []  # the reply comes from the drain, not the handler
 
 
-async def test_mention_from_a_sender_without_email_is_queued_with_none(
+async def test_queue_item_carries_the_app_user_id_and_no_email(
     redis: FakeRedis, dispatched: list[tuple]
 ) -> None:
-    event = load_fixture(SPACE)["chat"]
-    del event["messagePayload"]["message"]["sender"]["email"]
-
-    await handle_event(ChatPayload.model_validate(event))
+    await handle_event(ChatPayload.model_validate(load_fixture(SPACE)["chat"]), 7)
 
     [item] = queued(redis)
-    assert item["email"] is None
+    assert item["user_id"] == 7
+    assert "email" not in item
 
 
 async def test_duplicate_event_is_queued_once_but_still_dispatches(
@@ -147,8 +145,8 @@ async def test_duplicate_event_is_queued_once_but_still_dispatches(
 ) -> None:
     chat = ChatPayload.model_validate(load_fixture(SPACE)["chat"])
 
-    await handle_event(chat)
-    await handle_event(chat)
+    await handle_event(chat, 7)
+    await handle_event(chat, 7)
 
     assert len(queued(redis)) == 1
     # the first delivery may have died before dispatching; an idle drain is harmless
@@ -158,7 +156,7 @@ async def test_duplicate_event_is_queued_once_but_still_dispatches(
 async def test_dm_gets_the_spaces_only_reply_and_nothing_is_queued(
     fake_chat: FakeChat, redis: FakeRedis, dispatched: list[tuple]
 ) -> None:
-    await handle_event(ChatPayload.model_validate(load_fixture(DM)["chat"]))
+    await handle_event(ChatPayload.model_validate(load_fixture(DM)["chat"]), 7)
 
     assert fake_chat.sent == [("spaces/BBBBBBBBBBB", DM_REPLY)]
     assert queued(redis) == []
@@ -173,7 +171,7 @@ async def test_mention_without_text_gets_a_hint_and_nothing_is_queued(
     message["text"] = ""
     message["argumentText"] = "  "
 
-    await handle_event(ChatPayload.model_validate(chat))
+    await handle_event(ChatPayload.model_validate(chat), 7)
 
     assert fake_chat.sent == [("spaces/AAAAAAAAAAA", EMPTY_REPLY)]
     assert queued(redis) == []
@@ -186,7 +184,7 @@ async def test_mention_without_sender_is_ignored(
     chat = load_fixture(SPACE)["chat"]
     del chat["messagePayload"]["message"]["sender"]
 
-    await handle_event(ChatPayload.model_validate(chat))
+    await handle_event(ChatPayload.model_validate(chat), 7)
 
     assert fake_chat.sent == []
     assert queued(redis) == []
@@ -198,7 +196,7 @@ async def test_reset_command_is_queued_and_a_drain_dispatched(
 ) -> None:
     monkeypatch.setattr(google_chat.settings, "google_chat_reset_command_id", 1)
 
-    await handle_event(ChatPayload.model_validate(load_fixture(SLASH_FIXTURE)["chat"]))
+    await handle_event(ChatPayload.model_validate(load_fixture(SLASH_FIXTURE)["chat"]), 7)
 
     [item] = queued(redis)
     assert (item["kind"], item["space"], item["user"]) == (
@@ -220,13 +218,13 @@ async def test_other_command_ids_are_only_logged(
     # the fixture's command id is 1; with 0 nothing is a reset, with 2 only id 2 is
     monkeypatch.setattr(google_chat.settings, "google_chat_reset_command_id", reset_id)
 
-    await handle_event(ChatPayload.model_validate(load_fixture(SLASH_FIXTURE)["chat"]))
+    await handle_event(ChatPayload.model_validate(load_fixture(SLASH_FIXTURE)["chat"]), 7)
 
     assert queued(redis) == []
     assert dispatched == []
 
 
 def test_task_passes_its_trace_id_on_to_the_drain(dispatched: list[tuple]) -> None:
-    process_chat_event(load_fixture(SPACE)["chat"], "trace1234")
+    process_chat_event(load_fixture(SPACE)["chat"], "trace1234", 7)
 
     assert dispatched == [(DRAIN_TASK, "spaces/AAAAAAAAAAA", "users/1001", "trace1234")]

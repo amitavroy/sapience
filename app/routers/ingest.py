@@ -28,5 +28,6 @@ async def google_chat(event: VerifiedChatEvent, sender: VerifiedChatSender) -> d
         process_chat_event,
         chat.model_dump(mode="json", by_alias=True, exclude_unset=True),
         trace_id.get(),
+        sender,
     )
     return google_chat_service.reply(google_chat_service.ACK)

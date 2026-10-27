@@ -67,7 +67,7 @@ Each event carries `authorizationEventObject.systemIdToken`, an RS256 ID token s
 
 The endpoint enqueues only the `chat` part of the event, exactly as Google sent it. The ID token is never written to Redis.
 
-- Task: `process_chat_event(chat, trace_id)` in `app/tasks/google_chat.py`. It validates the payload into `ChatPayload`, then runs `handle_event` in `app/services/google_chat.py`.
+- Task: `process_chat_event(chat, trace_id, app_user_id)` in `app/tasks/google_chat.py`. It validates the payload into `ChatPayload`, then runs `handle_event` in `app/services/google_chat.py`.
 - `handle_event` only decides the event kind and delegates to a private handler; each handler does its own logging.
   - `_handle_mention` logs `google chat message space=... sender=... text=...`, then queues the message for the conversation agent (a DM or an empty mention gets a short reply instead). The worker's `drain_conversation` task runs the turn and posts the reply to the space. See [conversation.md](conversation.md).
   - `_handle_command` logs `google chat command id=... space=... sender=... text=...`. The command whose ID is `GOOGLE_CHAT_RESET_COMMAND_ID` (`/reset`) is queued like a message and clears the user's conversation in that space; other commands are only logged.

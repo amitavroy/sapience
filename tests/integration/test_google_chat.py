@@ -37,6 +37,7 @@ async def test_valid_event_is_acked_and_queued(
             "app.tasks.google_chat.process_chat_event",
             load_fixture(name)["chat"],  # exactly as Google sent it, minus the token
             response.headers["x-request-id"],
+            1,  # the app user created for the sender on first contact
         )
     ]
     assert token not in json.dumps(dispatched)  # the ID token never reaches the queue
@@ -58,6 +59,7 @@ async def test_slash_command_is_acked_and_queued(
             "app.tasks.google_chat.process_chat_event",
             load_fixture(SLASH_FIXTURE)["chat"],
             response.headers["x-request-id"],
+            1,  # the app user created for the sender on first contact
         )
     ]
     assert "appCommandPayload" in dispatched[0][1]
