@@ -1,4 +1,15 @@
 {
+  "permissions": {
+    "allow": ["Edit(./**)"],
+    "deny": [
+      "Edit(./.env)",
+      "Edit(./secrets/**)",
+      "Edit(./logs/**)",
+      "Edit(./.venv/**)",
+      "Edit(./.idea/**)",
+      "Edit(./.vscode/**)"
+    ]
+  },
   "hooks": {
     "Stop": [
       {
