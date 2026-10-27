@@ -1,5 +1,6 @@
 from langchain.agents.middleware import ModelRequest, dynamic_prompt
 
+from app.agent.nodes.retrieval import format_chunks
 from app.agent.state import ConversationContext
 
 SYSTEM_PROMPT = """\
@@ -16,6 +17,25 @@ if you have it. If you don't know something, say so.\
 """
 
 
+FOUND = """
+
+Excerpts from the user's knowledge base follow. Answer from them and name the source of what \
+you use. If they don't answer the question, say so.
+
+{knowledge}"""
+
+NO_MATCH = """
+
+A search of the user's knowledge base found nothing relevant to this question. Say you \
+couldn't find anything about it in their knowledge base; don't answer it from memory."""
+
+
 @dynamic_prompt
 def system_prompt(request: ModelRequest[ConversationContext]) -> str:
-    return SYSTEM_PROMPT.format(display_name=request.runtime.context.display_name)
+    prompt = SYSTEM_PROMPT.format(display_name=request.runtime.context.display_name)
+    outcome = request.state.get("search_outcome")
+    if outcome == "found":
+        prompt += FOUND.format(knowledge=format_chunks(request.state["knowledge"]))
+    elif outcome == "no_match":
+        prompt += NO_MATCH
+    return prompt

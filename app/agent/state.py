@@ -4,12 +4,17 @@ from typing import Annotated, TypedDict
 from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
 
-from app.services.retrieval import KnowledgeSearch
+from app.services.retrieval import KnowledgeSearch, RetrievedChunk
 
 
 class ConversationState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     reply: str
+    queries: list[str]  # the rewrite's output for this turn
+    probe: list[RetrievedChunk]
+    doc_ids: list[int]  # the documents the deep search covers, as graded
+    knowledge: list[RetrievedChunk]  # what the agent answers from
+    search_outcome: str  # "skipped" | "no_match" | "found"
 
 
 @dataclass(frozen=True)
