@@ -4,6 +4,8 @@ from typing import Annotated, TypedDict
 from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
 
+from app.services.retrieval import KnowledgeSearch
+
 
 class ConversationState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
@@ -18,3 +20,5 @@ class ConversationContext:
     user: str
     display_name: str
     user_id: int | None = None  # the asker's app user; their collections are found by it
+    # runtime context, not state: it is not serializable and the model must not control it
+    search: KnowledgeSearch | None = None

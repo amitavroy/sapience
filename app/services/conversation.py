@@ -23,6 +23,7 @@ from app.services import conversation_queue
 from app.services import google_chat as google_chat_service
 from app.services.conversation_log import ConversationKey, ConversationLog
 from app.services.conversation_queue import QueueItem
+from app.services.retrieval import KnowledgeSearch
 
 # caps the model <-> tools loop within one turn
 RECURSION_LIMIT = 12
@@ -205,7 +206,12 @@ async def _process_reset(chat: GoogleChatClient, log: ConversationLog, item: Que
         )
 
 
-async def process_item(chat: GoogleChatClient, log: ConversationLog, item: QueueItem) -> None:
+async def process_item(
+    chat: GoogleChatClient,
+    log: ConversationLog,
+    item: QueueItem,
+    search: KnowledgeSearch | None = None,
+) -> None:
     """Handle one queued item; never raises, so the drain can always pop it."""
     if item.kind == "reset":
         await _process_reset(chat, log, item)
@@ -214,7 +220,11 @@ async def process_item(chat: GoogleChatClient, log: ConversationLog, item: Queue
         logger.warning(f"unsupported queue item kind={item.kind} space={item.space}")
         return
     ctx = ConversationContext(
-        space=item.space, user=item.user, display_name=item.display_name, user_id=item.user_id
+        space=item.space,
+        user=item.user,
+        display_name=item.display_name,
+        user_id=item.user_id,
+        search=search,
     )
     key = _key(item)
     await _logged("user message", log.record_user_message(key, item.message_name, item.text))
@@ -256,10 +266,14 @@ async def process_item(chat: GoogleChatClient, log: ConversationLog, item: Queue
         )
 
 
-async def drain(space: str, user: str, log: ConversationLog) -> None:
+async def drain(
+    space: str, user: str, log: ConversationLog, search: KnowledgeSearch | None = None
+) -> None:
     """Worker entry: run this conversation's queued items, opening the per-task resources."""
     async with (
         conversation_queue.open_redis() as redis,
         google_chat_service.open_chat_client() as chat,
     ):
-        await conversation_queue.drain(redis, space, user, partial(process_item, chat, log))
+        await conversation_queue.drain(
+            redis, space, user, partial(process_item, chat, log, search=search)
+        )

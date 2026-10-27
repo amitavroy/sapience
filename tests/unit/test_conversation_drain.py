@@ -167,20 +167,20 @@ async def test_drain_runs_the_queued_items_through_process_item(
 def test_task_drains_under_its_trace_id_and_resets_it(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[tuple] = []
 
-    async def fake_drain(space: str, user: str, log) -> None:
-        seen.append((space, user, trace_var.get()))
+    async def fake_drain(space: str, user: str, log, search) -> None:
+        seen.append((space, user, trace_var.get(), type(search)))
 
     monkeypatch.setattr(conversation_task.conversation_service, "drain", fake_drain)
     before = trace_var.get()
 
     conversation_task.drain_conversation("spaces/A", "users/1", "trace1234")
 
-    assert seen == [("spaces/A", "users/1", "trace1234")]
+    assert seen == [("spaces/A", "users/1", "trace1234", conversation_task.TaskKnowledgeSearch)]
     assert trace_var.get() == before
 
 
 def test_task_resets_the_trace_id_when_the_drain_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def failing_drain(space: str, user: str, log) -> None:
+    async def failing_drain(space: str, user: str, log, search) -> None:
         raise RuntimeError("redis down")
 
     monkeypatch.setattr(conversation_task.conversation_service, "drain", failing_drain)
