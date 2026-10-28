@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 import httpx
 
+from app.agent.nodes.retrieval import NONE_LABEL
 from app.core.celery_app import dispatch
 from app.core.config import settings
 from app.core.google_chat_client import GoogleChatClient, GoogleChatError
@@ -20,7 +21,6 @@ EMPTY_REPLY = "Ask me something after the mention."
 FAILURE_REPLY = "Sorry, something went wrong. Please try again."
 RESET_REPLY = "Conversation cleared."
 NO_ACCESS_REPLY = "Sorry, your account can't use this bot."
-NONE_LABEL = "None of these"
 NONE_OPTION = "none"
 SKIPPED_NOTE = "This question was skipped."
 EXPIRED_NOTE = "This question has expired."
@@ -78,6 +78,16 @@ class ClarificationCard:
     question: str
     labels: list[str]
     asker: str  # Chat user id (users/123); only they can answer
+
+    @classmethod
+    def from_payload(cls, payload: dict, asker: str) -> "ClarificationCard":
+        """The card for the payload the graph paused with."""
+        return cls(
+            clarification_id=payload["clarification_id"],
+            question=payload["question"],
+            labels=[o["label"] for o in payload["options"]],
+            asker=asker,
+        )
 
 
 def _button(card: ClarificationCard, label: str, option: int | str) -> dict:

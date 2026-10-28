@@ -10,7 +10,7 @@ from app.agent.nodes.retrieval import Grade, NeedsKb, Option, Rewrite, validate_
 from app.agent.state import ConversationContext
 from app.agent.tools.knowledge import NO_KNOWLEDGE, NOTHING_FOUND
 from app.services import conversation
-from app.services.conversation import run_turn
+from app.services.conversation import StaleChoiceError, TurnResult, run_turn, thread_id
 from app.services.conversation_queue import QueueItem
 from app.services.google_chat import FAILURE_REPLY
 from tests.agent_helpers import FakeChat, FakeChatModel, FakeSearch, NullLog, make_chunk
@@ -56,8 +56,12 @@ def structured_names(model: FakeChatModel) -> list[str]:
     return [name for name, _ in model.structured_calls]
 
 
-async def ask(graph, ctx, text: str = QUESTION, n: int = 1) -> str:
+async def ask_turn(graph, ctx, text: str = QUESTION, n: int = 1) -> TurnResult:
     return await run_turn(graph, ctx, f"spaces/A/messages/{n}", text)
+
+
+async def ask(graph, ctx, text: str = QUESTION, n: int = 1) -> str | None:
+    return (await ask_turn(graph, ctx, text, n)).reply
 
 
 async def test_small_talk_skips_retrieval(graph, chat_model, classify_model) -> None:
@@ -166,17 +170,101 @@ async def test_empty_deep_search_is_no_match(graph, chat_model) -> None:
     assert "found nothing relevant" in system_text(chat_model)
 
 
-async def test_ambiguous_is_handled_as_clear_until_clarification_exists(graph, chat_model) -> None:
+async def test_ambiguous_pauses_with_a_card_and_no_reply(graph, chat_model) -> None:
     chat_model.structured["Grade"] = Grade(
         verdict="ambiguous",
         options=[Option(label="Refunds", doc_ids=[1]), Option(label="Shipping", doc_ids=[2])],
     )
     search = FakeSearch(probe=CHUNKS, deep=CHUNKS)
 
-    reply = await ask(graph, ctx_with(search))
+    result = await ask_turn(graph, ctx_with(search))
 
-    assert reply == "the answer"
-    assert search.calls[-1] == ("deep", 5, "refund policy", [1, 2])
+    assert result.reply is None
+    assert result.card.labels == ["Refunds", "Shipping"]
+    assert result.card.asker == "users/1"
+    assert [c[0] for c in search.calls] == ["probe"]  # no deep search until the user answers
+
+
+@pytest.fixture
+def paused(chat_model):
+    """An ambiguous question asked on a fresh thread: (search, card)."""
+    chat_model.structured["Grade"] = Grade(
+        verdict="ambiguous",
+        options=[Option(label="Refunds", doc_ids=[1]), Option(label="Shipping", doc_ids=[2])],
+    )
+    return FakeSearch(probe=CHUNKS, deep=[CHUNKS[1]])
+
+
+def click(card, option: str) -> dict:
+    return {"clarification_id": card.clarification_id, "option": option}
+
+
+async def test_click_searches_only_that_option_and_answers(graph, chat_model, paused) -> None:
+    ctx = ctx_with(paused)
+    card = (await ask_turn(graph, ctx)).card
+
+    result = await run_turn(graph, ctx, "spaces/A/messages/card#click", "", choice=click(card, "1"))
+
+    assert result.reply == "the answer"
+    assert paused.calls[-1] == ("deep", 5, f"{QUESTION} — Shipping", [2])
+    assert "Shipping takes 2 days" in system_text(chat_model)
+    assert not (
+        await graph.aget_state({"configurable": {"thread_id": thread_id(ctx.space, ctx.user)}})
+    ).interrupts
+
+
+async def test_none_of_these_ends_the_pause_with_an_invitation(graph, paused) -> None:
+    ctx = ctx_with(paused)
+    card = (await ask_turn(graph, ctx)).card
+
+    result = await run_turn(
+        graph, ctx, "spaces/A/messages/card#click", "", choice=click(card, "none")
+    )
+
+    assert result.reply == "No problem. Tell me what you're looking for."
+    assert [c[0] for c in paused.calls] == ["probe"]
+
+
+async def test_a_stale_click_is_refused_without_touching_the_thread(
+    graph, chat_model, paused
+) -> None:
+    ctx = ctx_with(paused)
+    card = (await ask_turn(graph, ctx)).card
+    calls = len(chat_model.calls)
+
+    with pytest.raises(StaleChoiceError):
+        await run_turn(graph, ctx, "m#click", "", choice={"clarification_id": "old", "option": "0"})
+
+    assert len(chat_model.calls) == calls
+    # the pause is still there for the right click
+    result = await run_turn(graph, ctx, "m#click", "", choice=click(card, "0"))
+    assert result.reply == "the answer"
+
+
+async def test_a_click_on_a_thread_that_is_not_paused_is_refused(graph, chat_model) -> None:
+    with pytest.raises(StaleChoiceError):
+        await run_turn(
+            graph,
+            ctx_with(FakeSearch()),
+            "m#click",
+            "",
+            choice={"clarification_id": "x", "option": "0"},
+        )
+
+    assert chat_model.calls == []
+
+
+async def test_a_typed_reply_while_paused_is_answered_as_a_new_question(
+    graph, chat_model, classify_model, paused
+) -> None:
+    ctx = ctx_with(paused)
+    await ask_turn(graph, ctx)
+    chat_model.structured["Grade"] = Grade(verdict="clear", relevant_doc_ids=[1])
+
+    result = await ask_turn(graph, ctx, "what about gift cards?", n=2)
+
+    assert result.reply == "the answer"
+    assert structured_names(classify_model) == ["NeedsKb", "NeedsKb"]  # asked again as new
 
 
 async def test_rewrite_is_capped_and_falls_back_to_the_question(graph, chat_model) -> None:
@@ -292,13 +380,16 @@ def _probe() -> list:
     return [make_chunk(1), make_chunk(2), make_chunk(3)]
 
 
-def test_validate_grade_ambiguous_with_two_options_searches_the_nearest_documents() -> None:
+def test_validate_grade_ambiguous_with_two_options_asks_with_their_valid_documents() -> None:
     grade = Grade(
         verdict="ambiguous",
         options=[Option(label="A", doc_ids=[1]), Option(label="B", doc_ids=[2, 99])],
     )
 
-    assert validate_grade(grade, _probe()) == ("clear", [1, 2, 3])
+    verdict, doc_ids, options = validate_grade(grade, _probe())
+
+    assert (verdict, doc_ids) == ("ambiguous", [])
+    assert [(o.label, o.doc_ids) for o in options] == [("A", [1]), ("B", [2])]
 
 
 def test_validate_grade_ambiguous_with_one_valid_option_is_clear_on_its_documents() -> None:
@@ -307,16 +398,16 @@ def test_validate_grade_ambiguous_with_one_valid_option_is_clear_on_its_document
         options=[Option(label="A", doc_ids=[2, 99]), Option(label="B", doc_ids=[98])],
     )
 
-    assert validate_grade(grade, _probe()) == ("clear", [2])
+    assert validate_grade(grade, _probe()) == ("clear", [2], [])
 
 
 def test_validate_grade_ambiguous_with_no_valid_options_is_no_match() -> None:
     grade = Grade(verdict="ambiguous", options=[Option(label="A", doc_ids=[98])])
 
-    assert validate_grade(grade, _probe()) == ("no_match", [])
+    assert validate_grade(grade, _probe()) == ("no_match", [], [])
 
 
 def test_validate_grade_clear_drops_unknown_and_repeated_ids() -> None:
     grade = Grade(verdict="clear", relevant_doc_ids=[3, 99, 3, 1])
 
-    assert validate_grade(grade, _probe()) == ("clear", [3, 1])
+    assert validate_grade(grade, _probe()) == ("clear", [3, 1], [])

@@ -7,6 +7,7 @@ from app.core.celery_app import celery_app
 from app.core.logger import logger
 from app.core.trace import trace_id as trace_var
 from app.services import conversation, conversation_queue
+from app.services.conversation import TurnResult
 from app.services.conversation_queue import QueueItem
 from app.services.google_chat import FAILURE_REPLY
 from app.tasks import conversation as conversation_task
@@ -46,9 +47,9 @@ def turns(monkeypatch: pytest.MonkeyPatch) -> list[tuple]:
 
     async def run_turn(
         graph, ctx: ConversationContext, message_name: str, text: str, from_checkpoint=None
-    ) -> str:
+    ) -> TurnResult:
         calls.append((ctx, message_name, text))
-        return "reply"
+        return TurnResult("reply")
 
     monkeypatch.setattr(conversation, "run_turn", run_turn)
     return calls
@@ -77,7 +78,7 @@ async def test_item_queued_before_user_id_existed_runs_with_no_user(turns: list[
 
 
 async def test_failed_turn_posts_the_apology(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def boom(graph, ctx, message_name, text, from_checkpoint=None) -> str:
+    async def boom(graph, ctx, message_name, text, from_checkpoint=None) -> TurnResult:
         raise RuntimeError("model down")
 
     monkeypatch.setattr(conversation, "run_turn", boom)
@@ -91,7 +92,7 @@ async def test_failed_turn_posts_the_apology(monkeypatch: pytest.MonkeyPatch) ->
 async def test_failed_apology_is_logged_not_raised(
     monkeypatch: pytest.MonkeyPatch, logs: list[dict]
 ) -> None:
-    async def boom(graph, ctx, message_name, text, from_checkpoint=None) -> str:
+    async def boom(graph, ctx, message_name, text, from_checkpoint=None) -> TurnResult:
         raise RuntimeError("model down")
 
     monkeypatch.setattr(conversation, "run_turn", boom)

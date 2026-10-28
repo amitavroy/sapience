@@ -15,6 +15,8 @@ class ConversationState(TypedDict):
     doc_ids: list[int]  # the documents the deep search covers, as graded
     knowledge: list[RetrievedChunk]  # what the agent answers from
     search_outcome: str  # "skipped" | "no_match" | "found"
+    pending: dict | None  # the interrupt payload grade built for an ambiguous question
+    choice: dict | None  # what the user answered; ask_clarification's resume value
 
 
 @dataclass(frozen=True)

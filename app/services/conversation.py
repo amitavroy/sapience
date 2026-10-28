@@ -2,12 +2,14 @@ import asyncio
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from functools import partial
 
 import openai
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.types import Command
 
 from app.agent.checkpointer import open_checkpointer
 from app.agent.graph import build_graph
@@ -55,25 +57,58 @@ async def current_checkpoint(graph: CompiledStateGraph, ctx: ConversationContext
     return state.config["configurable"].get("checkpoint_id")
 
 
+@dataclass(frozen=True)
+class TurnResult:
+    """What a turn produced: a reply to post, or a clarifying card (the thread is then paused)."""
+
+    reply: str | None
+    # quoted: google_chat imports the tasks that import this module, so it is only bound at runtime
+    card: "google_chat_service.ClarificationCard | None" = None
+
+
+class StaleChoiceError(Exception):
+    """A button click for a question that is no longer the pending one; dropped, no reply."""
+
+
 async def run_turn(
     graph: CompiledStateGraph,
     ctx: ConversationContext,
     message_name: str,
     text: str,
     from_checkpoint: str | None = None,
-) -> str:
-    """Run one user message through the graph and return the reply text.
+    choice: dict | None = None,
+) -> TurnResult:
+    """Run one user event through the graph.
 
-    `from_checkpoint` starts the turn from that checkpoint, which forks a new branch that then
-    becomes the thread's latest. Retries use it to leave a half-finished attempt behind.
+    A thread paused on a clarifying question is resumed, never given fresh input, so no pause is
+    left orphaned: a click (`choice`: clarification_id and option) answers it, and a typed
+    message goes in as text. `from_checkpoint` starts the turn from that checkpoint, which forks a
+    new branch that then becomes the thread's latest. Retries use it to leave a half-finished
+    attempt behind.
     """
-    # the Chat message name as id keeps the human message from being duplicated if re-applied
-    state = await graph.ainvoke(
-        {"messages": [HumanMessage(text, id=message_name)]},
-        _config(ctx, from_checkpoint),
-        context=ctx,
-    )
-    return state["reply"]
+    config = _config(ctx, from_checkpoint)
+    snapshot = await graph.aget_state(config)
+    if snapshot.interrupts:
+        pending = snapshot.interrupts[0].value
+        if choice is not None:
+            if choice["clarification_id"] != pending["clarification_id"]:
+                raise StaleChoiceError(choice["clarification_id"])
+            resume = {"kind": "choice", **choice, "message_name": message_name}
+        else:
+            resume = {"kind": "text", "text": text, "message_name": message_name}
+        state = await graph.ainvoke(Command(resume=resume), config, context=ctx)
+    elif choice is not None:  # nothing is waiting for this click
+        raise StaleChoiceError(choice["clarification_id"])
+    else:
+        # the Chat message name as id keeps the human message from being duplicated if re-applied
+        state = await graph.ainvoke(
+            {"messages": [HumanMessage(text, id=message_name)]}, config, context=ctx
+        )
+    if state.get("__interrupt__"):
+        payload = state["__interrupt__"][0].value
+        card = google_chat_service.ClarificationCard.from_payload(payload, ctx.user)
+        return TurnResult(reply=None, card=card)
+    return TurnResult(reply=state["reply"])
 
 
 async def record_failure(
@@ -134,18 +169,30 @@ async def _answer(
     item: QueueItem,
     from_checkpoint: str | None,
 ) -> tuple[str, str]:
-    """Run the turn and post the reply; returns the reply text and the Chat message it became."""
+    """Run the turn and post the reply or card; returns the text and the Chat message it became.
+
+    A card's text is its question, which is what the conversation log keeps for that turn.
+    """
     age = time.time() - item.enqueued_at
     if age > MESSAGE_TTL:
         raise MessageExpiredError(f"waited {int(age)}s in the queue")
 
-    async def turn() -> str:
+    async def turn() -> TurnResult:
         if from_checkpoint is None:  # nothing to fork from, so clear what a failed attempt left
             await graph.checkpointer.adelete_thread(thread_id(ctx.space, ctx.user))
         return await run_turn(graph, ctx, item.message_name, item.text, from_checkpoint)
 
-    answer = await _with_retries(turn, "conversation turn", item.space)
+    result = await _with_retries(turn, "conversation turn", item.space)
     # posting is retried on its own, so a Chat outage does not re-run the model
+    if result.card is not None:
+        card = result.card
+        chat_message_name = await _with_retries(
+            lambda: google_chat_service.send_card(chat, item.space, card),
+            "card post",
+            item.space,
+        )
+        return card.question, chat_message_name
+    answer = result.reply
     chat_message_name = await _with_retries(
         lambda: google_chat_service.send_message(chat, item.space, answer),
         "reply post",

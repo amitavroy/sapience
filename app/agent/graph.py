@@ -66,13 +66,14 @@ def build_graph(checkpointer: BaseCheckpointSaver) -> CompiledStateGraph:
     graph = StateGraph(ConversationState, context_schema=ConversationContext)
     graph.add_node("agent", run_agent)
     graph.add_node("finalize", finalize)
-    # needs_kb, grade route with Command(goto=...); nodes can't share a name with a state key,
-    # so the probe node is run_probe
+    # needs_kb, grade, resolve_choice route with Command(goto=...); nodes can't share a name with
+    # a state key, so the probe node is run_probe
     for name, node in retrieval_nodes(get_model("classify"), get_model("chat")).items():
         graph.add_node(name, node)
     graph.add_edge(START, "needs_kb")
     graph.add_edge("rewrite", "run_probe")
     graph.add_edge("run_probe", "grade")
+    graph.add_edge("ask_clarification", "resolve_choice")
     graph.add_edge("deep_retrieve", "agent")
     graph.add_edge("agent", "finalize")
     graph.add_edge("finalize", END)

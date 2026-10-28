@@ -40,7 +40,7 @@ async def test_second_turn_sees_the_first_turn(graph, model: FakeChatModel) -> N
     first = await run_turn(graph, ANN, "spaces/A/messages/1", "my name is Ana")
     second = await run_turn(graph, ANN, "spaces/A/messages/2", "what is my name?")
 
-    assert (first, second) == ("Hi Ana", "Your name is Ana")
+    assert (first.reply, second.reply) == ("Hi Ana", "Your name is Ana")
     seen = texts(model.calls[1])
     assert "my name is Ana" in seen
     assert "Hi Ana" in seen
@@ -149,7 +149,7 @@ async def test_tool_call_runs_with_the_space_from_context(
 
     reply = await run_turn(graph, ANN, "spaces/A/messages/1", "what is our onboarding?")
 
-    assert reply == "Nothing connected yet"
+    assert reply.reply == "Nothing connected yet"
     assert seen == [("onboarding", "spaces/A")]
     result = model.calls[1][-1]  # the tool output is what the model sees next
     assert (result.type, result.text) == ("tool", NO_KNOWLEDGE)

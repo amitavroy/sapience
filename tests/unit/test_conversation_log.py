@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.conversation import Conversation, Message, MessageRole, MessageStatus
 from app.services import conversation, conversation_log
+from app.services.conversation import TurnResult
 from app.services.conversation_log import ConversationKey
 from app.services.conversation_queue import QueueItem
 from app.services.google_chat import FAILURE_REPLY, RESET_REPLY
@@ -59,15 +60,15 @@ def fake_graph(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def reply(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def run_turn(graph, ctx, message_name, text, from_checkpoint=None) -> str:
-        return "hello Ann"
+    async def run_turn(graph, ctx, message_name, text, from_checkpoint=None) -> TurnResult:
+        return TurnResult("hello Ann")
 
     monkeypatch.setattr(conversation, "run_turn", run_turn)
 
 
 @pytest.fixture
 def model_down(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def run_turn(graph, ctx, message_name, text, from_checkpoint=None) -> str:
+    async def run_turn(graph, ctx, message_name, text, from_checkpoint=None) -> TurnResult:
         raise RuntimeError("model down")
 
     monkeypatch.setattr(conversation, "run_turn", run_turn)
@@ -146,8 +147,8 @@ async def test_redelivered_item_does_not_duplicate_rows(
 ) -> None:
     answers = iter(["first", "second"])
 
-    async def run_turn(graph, ctx, message_name, text, from_checkpoint=None) -> str:
-        return next(answers)
+    async def run_turn(graph, ctx, message_name, text, from_checkpoint=None) -> TurnResult:
+        return TurnResult(next(answers))
 
     monkeypatch.setattr(conversation, "run_turn", run_turn)
     log = SessionLog(db_session)
