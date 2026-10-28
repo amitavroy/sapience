@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from functools import partial
 
 import openai
+from coredis import Redis
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph.state import CompiledStateGraph
@@ -111,6 +112,14 @@ async def run_turn(
     return TurnResult(reply=state["reply"])
 
 
+async def choice_is_pending(
+    graph: CompiledStateGraph, ctx: ConversationContext, clarification_id: str
+) -> bool:
+    """Whether this thread is paused on exactly that question (a click on any other is stale)."""
+    snapshot = await graph.aget_state(_config(ctx))
+    return any(i.value["clarification_id"] == clarification_id for i in snapshot.interrupts)
+
+
 async def record_failure(
     graph: CompiledStateGraph,
     ctx: ConversationContext,
@@ -168,6 +177,7 @@ async def _answer(
     ctx: ConversationContext,
     item: QueueItem,
     from_checkpoint: str | None,
+    redis: Redis | None = None,
 ) -> tuple[str, str]:
     """Run the turn and post the reply or card; returns the text and the Chat message it became.
 
@@ -176,11 +186,17 @@ async def _answer(
     age = time.time() - item.enqueued_at
     if age > MESSAGE_TTL:
         raise MessageExpiredError(f"waited {int(age)}s in the queue")
+    # a click resumes the paused thread; other items do not pass `choice` at all
+    extra = (
+        {"choice": {"clarification_id": item.clarification_id, "option": item.option}}
+        if item.kind == "choice"
+        else {}
+    )
 
     async def turn() -> TurnResult:
         if from_checkpoint is None:  # nothing to fork from, so clear what a failed attempt left
             await graph.checkpointer.adelete_thread(thread_id(ctx.space, ctx.user))
-        return await run_turn(graph, ctx, item.message_name, item.text, from_checkpoint)
+        return await run_turn(graph, ctx, item.message_name, item.text, from_checkpoint, **extra)
 
     result = await _with_retries(turn, "conversation turn", item.space)
     # posting is retried on its own, so a Chat outage does not re-run the model
@@ -191,6 +207,8 @@ async def _answer(
             "card post",
             item.space,
         )
+        if redis is not None:  # so a later skip or expiry can edit the card
+            await conversation_queue.remember_card(redis, card.clarification_id, chat_message_name)
         return card.question, chat_message_name
     answer = result.reply
     chat_message_name = await _with_retries(
@@ -253,17 +271,33 @@ async def _process_reset(chat: GoogleChatClient, log: ConversationLog, item: Que
         )
 
 
+async def _click_is_current(item: QueueItem, ctx: ConversationContext) -> bool:
+    """Whether the click answers the question its thread is paused on.
+
+    Checked before anything is logged or posted, so a dropped click leaves no trace in the
+    conversation. If the check itself fails (checkpoint database down) the click goes on to
+    the normal path, where the failure ends in the apology.
+    """
+    try:
+        async with open_graph() as graph:
+            return await choice_is_pending(graph, ctx, item.clarification_id)
+    except Exception as e:
+        logger.warning(f"could not check the pending question: {_describe(e)}")
+        return True
+
+
 async def process_item(
     chat: GoogleChatClient,
     log: ConversationLog,
     item: QueueItem,
     search: KnowledgeSearch | None = None,
+    redis: Redis | None = None,
 ) -> None:
     """Handle one queued item; never raises, so the drain can always pop it."""
     if item.kind == "reset":
         await _process_reset(chat, log, item)
         return
-    if item.kind != "message":
+    if item.kind not in ("message", "choice"):
         logger.warning(f"unsupported queue item kind={item.kind} space={item.space}")
         return
     ctx = ConversationContext(
@@ -274,6 +308,10 @@ async def process_item(
         search=search,
     )
     key = _key(item)
+    if item.kind == "choice" and not await _click_is_current(item, ctx):
+        # a stale card, a second click or another user's card: no model call, no reply, no log
+        logger.info(f"dropping click on a question that is not pending space={item.space}")
+        return
     await _logged("user message", log.record_user_message(key, item.message_name, item.text))
     try:
         # the graph is opened here, not once per drain: a missing LLM key or an unreachable
@@ -281,7 +319,11 @@ async def process_item(
         async with open_graph() as graph:
             from_checkpoint = await current_checkpoint(graph, ctx)
             try:
-                reply, chat_message_name = await _answer(graph, chat, ctx, item, from_checkpoint)
+                reply, chat_message_name = await _answer(
+                    graph, chat, ctx, item, from_checkpoint, redis
+                )
+            except StaleChoiceError:
+                raise
             except Exception:
                 try:
                     await record_failure(graph, ctx, item.message_name, item.text, from_checkpoint)
@@ -295,6 +337,8 @@ async def process_item(
                 key, item.message_name, item.text, MessageStatus.ANSWERED, None
             ),
         )
+    except StaleChoiceError:  # lost the race to an answer the check could not see
+        logger.info(f"dropping click on a question that is not pending space={item.space}")
     except Exception as e:
         logger.error(f"conversation turn failed space={item.space}: {_describe(e)}")
         apology = google_chat_service.FAILURE_REPLY
@@ -322,5 +366,5 @@ async def drain(
         google_chat_service.open_chat_client() as chat,
     ):
         await conversation_queue.drain(
-            redis, space, user, partial(process_item, chat, log, search=search)
+            redis, space, user, partial(process_item, chat, log, search=search, redis=redis)
         )

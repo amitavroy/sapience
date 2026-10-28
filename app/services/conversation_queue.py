@@ -12,6 +12,7 @@ from app.core.logger import logger
 
 LOCK_TTL = 900  # seconds; also the backstop that frees the lock after a crashed worker
 SEEN_TTL = 86400  # Celery is at-least-once and Google retries events, so remember a day
+CARD_TTL = 1800  # a clarifying question expires after 30 minutes; so does the note of its card
 
 # Every lock operation compares the token first: after our lock expires, another drain may
 # hold it, and we must neither remove it, extend it, nor pop the item it is now working on.
@@ -64,6 +65,20 @@ def lock_key(space: str, user: str) -> str:
 
 def seen_key(message_name: str) -> str:
     return f"chat:seen:{message_name}"
+
+
+def card_key(clarification_id: str) -> str:
+    return f"chat:card:{clarification_id}"
+
+
+async def remember_card(redis: Redis, clarification_id: str, card_message_name: str) -> None:
+    """The card's Chat message name is only known once it is posted; a later skip or expiry
+    edits the card by it. Missing or failed: the edit is skipped, the stale-click check
+    keeps an old card harmless anyway."""
+    try:
+        await redis.set(card_key(clarification_id), card_message_name, ex=CARD_TTL)
+    except Exception as e:
+        logger.warning(f"could not remember the card name: {type(e).__name__}")
 
 
 async def enqueue(redis: Redis, item: QueueItem) -> bool:

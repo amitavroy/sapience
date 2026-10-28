@@ -1,5 +1,6 @@
 """Agent test helpers: a scripted chat model that records what it was asked."""
 
+from types import SimpleNamespace
 from typing import Any
 
 from langchain_core.language_models import BaseChatModel
@@ -139,8 +140,9 @@ class FakeRedis:
 class FakeGraph:
     """Just enough of a compiled graph for process_item when run_turn is faked out."""
 
-    def __init__(self, checkpoint: str | None = None) -> None:
+    def __init__(self, checkpoint: str | None = None, pending: str | None = None) -> None:
         self.checkpoint = checkpoint
+        self.pending = pending  # the clarification id the thread is paused on, if any
         self.checkpointer = self
         self.deleted: list[str] = []
         self.updates: list[tuple] = []
@@ -149,7 +151,11 @@ class FakeGraph:
         configurable = {"thread_id": config["configurable"]["thread_id"]}
         if self.checkpoint:
             configurable["checkpoint_id"] = self.checkpoint
-        return type("Snapshot", (), {"config": {"configurable": configurable}})()
+        interrupts = (
+            [SimpleNamespace(value={"clarification_id": self.pending})] if self.pending else []
+        )
+        snapshot = {"config": {"configurable": configurable}, "interrupts": interrupts}
+        return SimpleNamespace(**snapshot)
 
     async def adelete_thread(self, thread_id: str) -> None:
         self.deleted.append(thread_id)

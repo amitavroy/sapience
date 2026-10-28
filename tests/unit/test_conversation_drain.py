@@ -195,3 +195,127 @@ def test_task_resets_the_trace_id_when_the_drain_raises(monkeypatch: pytest.Monk
 
 def test_drain_task_is_registered_with_celery() -> None:
     assert "app.tasks.conversation" in celery_app.conf.include
+
+
+CLICK = QueueItem(
+    kind="choice",
+    space="spaces/A",
+    user="users/1",
+    message_name="spaces/A/messages/card#click",
+    text="Shipping",
+    display_name="Ann",
+    user_id=7,
+    clarification_id="abc",
+    option="1",
+)
+
+
+def paused_on(monkeypatch: pytest.MonkeyPatch, clarification_id: str | None) -> FakeGraph:
+    graph = FakeGraph(checkpoint="cp-paused", pending=clarification_id)
+
+    @asynccontextmanager
+    async def open_graph():
+        yield graph
+
+    monkeypatch.setattr(conversation, "open_graph", open_graph)
+    return graph
+
+
+@pytest.fixture
+def resumes(monkeypatch: pytest.MonkeyPatch) -> list[tuple]:
+    """(message_name, from_checkpoint, choice) for every turn the fake graph ran."""
+    calls: list[tuple] = []
+
+    async def run_turn(graph, ctx, message_name, text, from_checkpoint=None, choice=None):
+        calls.append((message_name, from_checkpoint, choice))
+        return TurnResult("the answer")
+
+    monkeypatch.setattr(conversation, "run_turn", run_turn)
+    return calls
+
+
+async def test_click_on_the_pending_question_resumes_the_thread(
+    monkeypatch: pytest.MonkeyPatch, resumes: list[tuple]
+) -> None:
+    paused_on(monkeypatch, "abc")
+    chat = FakeChat()
+
+    await conversation.process_item(chat, NullLog(), CLICK)
+
+    # forked from the paused checkpoint, so a retry would start from the pause again
+    assert resumes == [
+        ("spaces/A/messages/card#click", "cp-paused", {"clarification_id": "abc", "option": "1"})
+    ]
+    assert chat.sent == [("spaces/A", "the answer")]
+
+
+@pytest.mark.parametrize("pending", [None, "other"], ids=["not-paused", "other-question"])
+async def test_click_on_anything_else_is_dropped_without_a_trace(
+    monkeypatch: pytest.MonkeyPatch, resumes: list[tuple], pending: str | None
+) -> None:
+    paused_on(monkeypatch, pending)
+    chat = FakeChat()
+
+    class RecordingLog(NullLog):
+        written = False
+
+        async def record_user_message(self, key, message_name, text) -> None:
+            RecordingLog.written = True
+
+    await conversation.process_item(chat, RecordingLog(), CLICK)
+
+    assert resumes == []  # no model call
+    assert chat.sent == []  # no reply
+    assert not RecordingLog.written  # nothing in the conversation log
+
+
+async def test_a_posted_card_is_remembered_for_half_an_hour(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services.google_chat import ClarificationCard
+    from tests.agent_helpers import FakeRedis
+
+    async def run_turn(graph, ctx, message_name, text, from_checkpoint=None, choice=None):
+        return TurnResult(None, ClarificationCard("abc", "Which?", ["A", "B"], "users/1"))
+
+    monkeypatch.setattr(conversation, "run_turn", run_turn)
+    ttls: list[int] = []
+
+    class CardChat(FakeChat):
+        async def create_card_message(self, space, text, cards_v2) -> str:
+            return "spaces/A/messages/card"
+
+    class TtlRedis(FakeRedis):
+        async def set(self, key, value, condition=None, ex=None):
+            ttls.append(ex)
+            return await super().set(key, value, condition, ex)
+
+    redis = TtlRedis()
+
+    await conversation.process_item(CardChat(), NullLog(), ITEM, redis=redis)
+
+    assert redis.values == {"chat:card:abc": "spaces/A/messages/card"}
+    assert ttls == [1800]
+
+
+async def test_a_failing_redis_does_not_lose_the_card(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services.google_chat import ClarificationCard
+
+    async def run_turn(graph, ctx, message_name, text, from_checkpoint=None, choice=None):
+        return TurnResult(None, ClarificationCard("abc", "Which?", ["A", "B"], "users/1"))
+
+    monkeypatch.setattr(conversation, "run_turn", run_turn)
+    sent: list[str] = []
+
+    class CardChat(FakeChat):
+        async def create_card_message(self, space, text, cards_v2) -> str:
+            sent.append(text)
+            return "spaces/A/messages/card"
+
+    class DownRedis:
+        async def set(self, *args, **kwargs):
+            raise ConnectionError("redis down")
+
+    await conversation.process_item(CardChat(), NullLog(), ITEM, redis=DownRedis())
+
+    assert sent == ["Which?"]
