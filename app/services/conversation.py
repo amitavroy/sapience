@@ -312,7 +312,9 @@ async def process_item(
         # a stale card, a second click or another user's card: no model call, no reply, no log
         logger.info(f"dropping click on a question that is not pending space={item.space}")
         return
-    await _logged("user message", log.record_user_message(key, item.message_name, item.text))
+    # a click is a user turn like any other: the log and the thread both read "Chose: <label>"
+    text = f"Chose: {item.text}" if item.kind == "choice" else item.text
+    await _logged("user message", log.record_user_message(key, item.message_name, text))
     try:
         # the graph is opened here, not once per drain: a missing LLM key or an unreachable
         # database must end in the apology, and an idle drain should not open a connection
@@ -326,16 +328,14 @@ async def process_item(
                 raise
             except Exception:
                 try:
-                    await record_failure(graph, ctx, item.message_name, item.text, from_checkpoint)
+                    await record_failure(graph, ctx, item.message_name, text, from_checkpoint)
                 except Exception as e:
                     logger.error(f"could not record the failed turn: {_describe(e)}")
                 raise
         await _logged("reply", log.record_reply(key, item.message_name, reply, chat_message_name))
         await _logged(
             "outcome",
-            log.finish_user_message(
-                key, item.message_name, item.text, MessageStatus.ANSWERED, None
-            ),
+            log.finish_user_message(key, item.message_name, text, MessageStatus.ANSWERED, None),
         )
     except StaleChoiceError:  # lost the race to an answer the check could not see
         logger.info(f"dropping click on a question that is not pending space={item.space}")
@@ -353,7 +353,7 @@ async def process_item(
         await _logged("apology", log.record_reply(key, item.message_name, apology, apology_name))
         await _logged(
             "outcome",
-            log.finish_user_message(key, item.message_name, item.text, status, _describe(e)),
+            log.finish_user_message(key, item.message_name, text, status, _describe(e)),
         )
 
 

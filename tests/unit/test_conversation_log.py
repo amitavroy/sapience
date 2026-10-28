@@ -60,7 +60,9 @@ def fake_graph(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def reply(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def run_turn(graph, ctx, message_name, text, from_checkpoint=None) -> TurnResult:
+    async def run_turn(
+        graph, ctx, message_name, text, from_checkpoint=None, choice=None
+    ) -> TurnResult:
         return TurnResult("hello Ann")
 
     monkeypatch.setattr(conversation, "run_turn", run_turn)
@@ -380,3 +382,56 @@ async def test_retried_reset_does_not_duplicate_the_reply_row(
     await conversation.process_item(FakeChat(), log, RESET)
 
     assert len((await db_session.scalars(select(Message))).all()) == 1
+
+
+CLICK = QueueItem(
+    kind="choice",
+    space="spaces/A",
+    user="users/1",
+    message_name="spaces/A/messages/card#click",
+    text="Shipping",
+    display_name="Ann",
+    clarification_id="abc",
+    option="1",
+)
+
+
+async def test_click_is_logged_as_a_user_message_chose_the_label(
+    db_session: AsyncSession, reply, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    @asynccontextmanager
+    async def open_graph():
+        yield FakeGraph(checkpoint="cp", pending="abc")
+
+    monkeypatch.setattr(conversation, "open_graph", open_graph)
+
+    await conversation.process_item(FakeChat(), SessionLog(db_session), CLICK)
+
+    rows = await _messages(db_session)
+    user, assistant = rows[CLICK.message_name], rows[f"{CLICK.message_name}#reply"]
+    assert (user.role, user.content, user.status) == (
+        MessageRole.USER,
+        "Chose: Shipping",
+        MessageStatus.ANSWERED,
+    )
+    assert assistant.content == "hello Ann"
+
+
+async def test_card_turn_logs_the_question_with_the_cards_chat_message_name(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.services.google_chat import ClarificationCard
+
+    async def run_turn(graph, ctx, message_name, text, from_checkpoint=None, choice=None):
+        return TurnResult(None, ClarificationCard("abc", "Which?", ["A", "B"], "users/1"))
+
+    monkeypatch.setattr(conversation, "run_turn", run_turn)
+
+    class CardChat(FakeChat):
+        async def create_card_message(self, space, text, cards_v2) -> str:
+            return "spaces/A/messages/card"
+
+    await conversation.process_item(CardChat(), SessionLog(db_session), ITEM)
+
+    assistant = (await _messages(db_session))[f"{ITEM.message_name}#reply"]
+    assert (assistant.content, assistant.chat_message_name) == ("Which?", "spaces/A/messages/card")
