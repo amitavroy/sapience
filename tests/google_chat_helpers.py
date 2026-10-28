@@ -128,3 +128,25 @@ class ChatApiServer:
         if status >= 400:
             return httpx.Response(status, json={"error": {"message": f"chat said {status}"}})
         return httpx.Response(status, json={"name": self.message_name})
+
+
+def click_event(token: str, *, clicker: str = "users/1001", asker: str = "users/1001") -> dict:
+    """A card button click, shaped after the docs (not captured yet; see the plan's manual check).
+
+    The button's parameters arrive in commonEventObject, outside `chat`.
+    """
+    event = load_fixture(CHAT_FIXTURES[0])
+    message = event["chat"].pop("messagePayload")
+    event["chat"]["user"]["name"] = clicker
+    event["chat"]["buttonClickedPayload"] = {
+        "space": message["space"],
+        "message": {"name": "spaces/AAAAAAAAAAA/messages/CARD1.CARD1"},
+    }
+    event["commonEventObject"]["parameters"] = {
+        "clarification_id": "abc",
+        "option": "1",
+        "label": "Shipping",
+        "asker": asker,
+    }
+    event["authorizationEventObject"]["systemIdToken"] = token
+    return event

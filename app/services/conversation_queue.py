@@ -30,7 +30,7 @@ _POP = (
 
 
 class QueueItem(BaseModel):
-    kind: Literal["message", "reset"] = "message"
+    kind: Literal["message", "reset", "choice"] = "message"
     space: str
     user: str
     message_name: str = ""
@@ -39,6 +39,9 @@ class QueueItem(BaseModel):
     # resolved from the Google-authenticated event at the webhook, never the message text;
     # None only on an item queued before this field existed
     user_id: int | None = None
+    # a button click: which question it answers and which option ("0", "1" or "none")
+    clarification_id: str = ""
+    option: str = ""
     trace_id: str = ""
     enqueued_at: float = Field(default_factory=time.time)
 

@@ -10,7 +10,7 @@ from app.services import conversation_queue, google_chat
 from app.services.google_chat import DM_REPLY, EMPTY_REPLY, handle_event
 from app.tasks.google_chat import process_chat_event
 from tests.agent_helpers import FakeChat, FakeRedis
-from tests.google_chat_helpers import CHAT_FIXTURES, SLASH_FIXTURE, load_fixture
+from tests.google_chat_helpers import CHAT_FIXTURES, SLASH_FIXTURE, click_event, load_fixture
 
 SPACE, DM = CHAT_FIXTURES
 DRAIN_TASK = "app.tasks.conversation.drain_conversation"
@@ -123,6 +123,8 @@ async def test_mention_in_a_space_is_queued_and_a_drain_dispatched(
         "text": "hi",
         "display_name": "Ann Example",
         "user_id": 7,
+        "clarification_id": "",
+        "option": "",
         "trace_id": "trace-abc",
         "enqueued_at": 0,
     }
@@ -228,3 +230,54 @@ def test_task_passes_its_trace_id_on_to_the_drain(dispatched: list[tuple]) -> No
     process_chat_event(load_fixture(SPACE)["chat"], "trace1234", 7)
 
     assert dispatched == [(DRAIN_TASK, "spaces/AAAAAAAAAAA", "users/1001", "trace1234")]
+
+
+def click_chat(**overrides: str) -> ChatPayload:
+    chat = click_event("token")["chat"]
+    chat["actionParameters"] = {
+        "clarification_id": "abc",
+        "option": "1",
+        "label": "Shipping",
+        "asker": "users/1001",
+        **overrides,
+    }
+    return ChatPayload.model_validate(chat)
+
+
+async def test_click_is_queued_as_a_choice_on_the_clickers_conversation(
+    redis: FakeRedis, dispatched: list[tuple]
+) -> None:
+    trace_var.set("trace-abc")
+
+    await handle_event(click_chat(), 7)
+
+    [raw] = redis.lists["chat:q:spaces/AAAAAAAAAAA:users/1001"]
+    item = conversation_queue.QueueItem.model_validate_json(raw)
+    assert (item.kind, item.clarification_id, item.option, item.text) == (
+        "choice",
+        "abc",
+        "1",
+        "Shipping",
+    )
+    assert (item.user, item.user_id) == ("users/1001", 7)
+    assert item.message_name == "spaces/AAAAAAAAAAA/messages/CARD1.CARD1#click"
+    assert dispatched == [(DRAIN_TASK, "spaces/AAAAAAAAAAA", "users/1001", "trace-abc")]
+
+
+async def test_a_second_click_on_the_same_card_is_queued_once(redis: FakeRedis) -> None:
+    await handle_event(click_chat(), 7)
+    await handle_event(click_chat(option="0"), 7)
+
+    assert len(redis.lists["chat:q:spaces/AAAAAAAAAAA:users/1001"]) == 1
+
+
+async def test_click_without_a_clarification_id_is_ignored(
+    redis: FakeRedis, dispatched: list[tuple]
+) -> None:
+    chat = click_chat()
+    del chat.action_parameters["clarification_id"]
+
+    await handle_event(chat, 7)
+
+    assert redis.lists == {}
+    assert dispatched == []

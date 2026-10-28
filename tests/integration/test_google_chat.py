@@ -9,8 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models.user import User
 from app.services import user as user_service
-from app.services.google_chat import ACK, NO_ACCESS_REPLY, reply
-from tests.google_chat_helpers import CHAT_FIXTURES, SLASH_FIXTURE, load_fixture
+from app.services.google_chat import ACK, NO_ACCESS_REPLY, click_response, reply
+from tests.google_chat_helpers import CHAT_FIXTURES, SLASH_FIXTURE, click_event, load_fixture
 
 Sign = Callable[..., str]
 
@@ -238,6 +238,48 @@ async def test_event_with_nothing_to_queue_does_no_lookup(
     del event["chat"]["messagePayload"]
 
     response = await chat_client.post("/ingest/google-chat", json=event)
+
+    assert response.json() == {}
+    assert dispatched == []
+
+
+async def test_click_from_the_asker_is_queued_with_its_parameters_and_swaps_the_card(
+    chat_client: httpx.AsyncClient, sign_google_token: Sign, dispatched: list[tuple]
+) -> None:
+    token = sign_google_token()
+
+    response = await chat_client.post("/ingest/google-chat", json=click_event(token))
+
+    assert response.status_code == 200
+    assert response.json() == click_response({"label": "Shipping"})
+    assert "Looking into: Shipping" in json.dumps(response.json())
+    [(task, chat, _, user_id)] = dispatched
+    assert task == "app.tasks.google_chat.process_chat_event"
+    assert chat["actionParameters"]["clarification_id"] == "abc"
+    assert "buttonClickedPayload" in chat
+    assert token not in json.dumps(dispatched)
+
+
+async def test_click_from_anyone_but_the_asker_gets_no_update_and_queues_nothing(
+    chat_client: httpx.AsyncClient, sign_google_token: Sign, dispatched: list[tuple]
+) -> None:
+    event = click_event(sign_google_token(), clicker="users/1001", asker="users/9999")
+
+    response = await chat_client.post("/ingest/google-chat", json=event)
+
+    assert response.json() == {}
+    assert dispatched == []
+
+
+async def test_click_from_a_rejected_sender_gets_no_update_and_queues_nothing(
+    chat_client: httpx.AsyncClient,
+    sign_google_token: Sign,
+    dispatched: list[tuple],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "google_chat_allowed_email_domains", "other.example")
+
+    response = await chat_client.post("/ingest/google-chat", json=click_event(sign_google_token()))
 
     assert response.json() == {}
     assert dispatched == []

@@ -54,15 +54,29 @@ class AppCommandPayload(ChatModel):
     app_command_metadata: AppCommandMetadata
 
 
+class ButtonClickedPayload(ChatModel):
+    space: ChatSpace
+    message: ChatMessage  # the card the button is on
+
+
 class ChatPayload(ChatModel):
     user: ChatUser | None = None
     event_time: datetime | None = None
     message_payload: MessagePayload | None = None  # @mention; absent for e.g. added-to-space
     app_command_payload: AppCommandPayload | None = None  # slash command
+    button_clicked_payload: ButtonClickedPayload | None = None  # a card button
+    # not sent by Google inside `chat`: the router copies commonEventObject.parameters here for a
+    # click, so the worker sees what the button carried
+    action_parameters: dict[str, str] = {}
+
+
+class CommonEventObject(ChatModel):
+    parameters: dict[str, str] = {}  # a clicked button's action parameters
 
 
 class GoogleChatEvent(ChatModel):
     authorization_event_object: AuthorizationEventObject
+    common_event_object: CommonEventObject | None = None
     chat: ChatPayload | None = None
 
 

@@ -26,11 +26,22 @@ SKIPPED_NOTE = "This question was skipped."
 EXPIRED_NOTE = "This question has expired."
 
 
+def is_click(chat: ChatPayload | None) -> bool:
+    return chat is not None and chat.button_clicked_payload is not None
+
+
 def is_queued(chat: ChatPayload | None) -> bool:
-    """A message or a command; anything else (e.g. added to a space) has nothing to queue."""
+    """A message, a command or a button click; anything else (e.g. added to a space) is ignored."""
     return chat is not None and (
-        chat.message_payload is not None or chat.app_command_payload is not None
+        chat.message_payload is not None
+        or chat.app_command_payload is not None
+        or chat.button_clicked_payload is not None
     )
+
+
+def is_asker(chat: ChatPayload, parameters: dict[str, str]) -> bool:
+    """Only the user the question was asked of may answer it (the button carries their id)."""
+    return chat.user is not None and parameters.get("asker") == chat.user.name
 
 
 def reply(text: str) -> dict:
@@ -38,6 +49,18 @@ def reply(text: str) -> dict:
     return {
         "hostAppDataAction": {
             "chatDataAction": {"createMessageAction": {"message": {"text": text}}}
+        }
+    }
+
+
+def click_response(parameters: dict[str, str]) -> dict:
+    """Swaps the card for a line, so the buttons are gone and a second click is impossible."""
+    label = parameters.get("label", "")
+    return {
+        "hostAppDataAction": {
+            "chatDataAction": {
+                "updateMessageAction": {"message": {"text": f"Looking into: {label}…"}}
+            }
         }
     }
 
@@ -145,6 +168,8 @@ async def handle_event(chat: ChatPayload, app_user_id: int) -> None:
         await _handle_mention(chat.message_payload, app_user_id)
     elif chat.app_command_payload is not None:
         await _handle_command(chat.app_command_payload, app_user_id)
+    elif chat.button_clicked_payload is not None:
+        await _handle_click(chat, app_user_id)
     # anything else (e.g. added to a space): nothing to process
 
 
@@ -213,4 +238,31 @@ async def _handle_command(payload: AppCommandPayload, app_user_id: int) -> None:
     async with conversation_queue.open_redis() as redis:
         queued = await conversation_queue.enqueue(redis, item)
     logger.info(f"conversation reset queued={queued} space={space} message={msg.name}")
+    await dispatch(conversation_tasks.drain_conversation, space, item.user, item.trace_id)
+
+
+async def _handle_click(chat: ChatPayload, app_user_id: int) -> None:
+    """Queue a card button click on the clicker's own conversation, next to their messages."""
+    payload = chat.button_clicked_payload
+    params = chat.action_parameters
+    if chat.user is None or "clarification_id" not in params:
+        logger.warning("google chat click ignored: no clicker or no clarification id")
+        return
+    space = payload.space.name
+    item = conversation_queue.QueueItem(
+        kind="choice",
+        space=space,
+        user=chat.user.name,
+        # one click per card: a double click or a Google retry is dropped as a duplicate
+        message_name=f"{payload.message.name}#click",
+        text=params.get("label", ""),
+        display_name=chat.user.display_name or chat.user.name,
+        user_id=app_user_id,
+        clarification_id=params["clarification_id"],
+        option=params.get("option", ""),
+        trace_id=trace_id.get(),
+    )
+    async with conversation_queue.open_redis() as redis:
+        queued = await conversation_queue.enqueue(redis, item)
+    logger.info(f"conversation click queued={queued} space={space} card={payload.message.name}")
     await dispatch(conversation_tasks.drain_conversation, space, item.user, item.trace_id)
