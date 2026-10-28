@@ -1,12 +1,13 @@
 import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 
 import httpx
 
 from app.core.celery_app import dispatch
 from app.core.config import settings
-from app.core.google_chat_client import GoogleChatClient
+from app.core.google_chat_client import GoogleChatClient, GoogleChatError
 from app.core.logger import logger
 from app.core.trace import trace_id
 from app.schemas.google_chat import AppCommandPayload, ChatPayload, MessagePayload
@@ -19,6 +20,10 @@ EMPTY_REPLY = "Ask me something after the mention."
 FAILURE_REPLY = "Sorry, something went wrong. Please try again."
 RESET_REPLY = "Conversation cleared."
 NO_ACCESS_REPLY = "Sorry, your account can't use this bot."
+NONE_LABEL = "None of these"
+NONE_OPTION = "none"
+SKIPPED_NOTE = "This question was skipped."
+EXPIRED_NOTE = "This question has expired."
 
 
 def is_queued(chat: ChatPayload | None) -> bool:
@@ -63,6 +68,65 @@ async def send_message(client: GoogleChatClient, space: str, text: str) -> str:
     name = await client.create_message(space, to_chat_markup(text))
     logger.info(f"google chat sent space={space} message={name}")
     return name
+
+
+@dataclass(frozen=True)
+class ClarificationCard:
+    """What the card shows: the question, up to 3 option labels, and who may answer."""
+
+    clarification_id: str
+    question: str
+    labels: list[str]
+    asker: str  # Chat user id (users/123); only they can answer
+
+
+def _button(card: ClarificationCard, label: str, option: int | str) -> dict:
+    return {
+        "text": label,
+        "onClick": {
+            "action": {
+                "function": "clarification_choice",
+                "parameters": [
+                    {"key": "clarification_id", "value": card.clarification_id},
+                    {"key": "option", "value": str(option)},
+                    {"key": "label", "value": label},
+                    {"key": "asker", "value": card.asker},
+                ],
+            }
+        },
+    }
+
+
+async def send_card(client: GoogleChatClient, space: str, card: ClarificationCard) -> str:
+    """Posts the clarifying question with one button per option plus "None of these"."""
+    buttons = [_button(card, label, i) for i, label in enumerate(card.labels)]
+    buttons.append(_button(card, NONE_LABEL, NONE_OPTION))
+    cards_v2 = [
+        {
+            "cardId": card.clarification_id,
+            "card": {
+                "sections": [
+                    {
+                        "widgets": [
+                            {"textParagraph": {"text": card.question}},
+                            {"buttonList": {"buttons": buttons}},
+                        ]
+                    }
+                ]
+            },
+        }
+    ]
+    name = await client.create_card_message(space, card.question, cards_v2)
+    logger.info(f"google chat card sent space={space} message={name}")
+    return name
+
+
+async def edit_card(client: GoogleChatClient, name: str, note: str) -> None:
+    """Swaps a card for one line ("skipped" / "expired"). Never raises: the reply matters more."""
+    try:
+        await client.update_message(name, note, None)
+    except GoogleChatError as e:
+        logger.warning(f"google chat card edit failed message={name} status={e.status}: {e}")
 
 
 async def handle_event(chat: ChatPayload, app_user_id: int) -> None:

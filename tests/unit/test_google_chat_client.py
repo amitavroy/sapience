@@ -1,4 +1,5 @@
 import asyncio
+import json
 import time
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -148,3 +149,32 @@ async def test_credentials_without_private_key_not_configured(
 
     assert str(exc.value) == "unreadable credentials file: KeyError"
     assert chat_api.requests == []
+
+
+async def test_card_message_posts_text_and_cards(chat: GoogleChatClient, chat_api: ChatApiServer):
+    name = await chat.create_card_message("spaces/AAA", "Which?", [{"cardId": "c1"}])
+
+    sent = chat_api.chat_requests[0]
+    assert name == chat_api.message_name
+    assert sent.method == "POST"
+    assert json.loads(sent.content) == {"text": "Which?", "cardsV2": [{"cardId": "c1"}]}
+
+
+async def test_update_message_patches_and_drops_cards(
+    chat: GoogleChatClient, chat_api: ChatApiServer
+):
+    await chat.update_message("spaces/AAA/messages/M1", "skipped", None)
+
+    sent = chat_api.chat_requests[0]
+    assert sent.method == "PATCH"
+    assert sent.url.path == "/v1/spaces/AAA/messages/M1"
+    assert sent.url.params["updateMask"] == "text,cardsV2"
+    assert json.loads(sent.content) == {"text": "skipped", "cardsV2": []}
+
+
+async def test_update_message_retries_once_on_401(chat: GoogleChatClient, chat_api: ChatApiServer):
+    chat_api.chat_statuses = [401, 200]
+
+    await chat.update_message("spaces/AAA/messages/M1", "skipped", None)
+
+    assert len(chat_api.token_requests) == 2

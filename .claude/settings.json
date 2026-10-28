@@ -1,6 +1,6 @@
 {
   "permissions": {
-    "allow": ["Edit(./**)"],
+    "allow": ["Edit(./**)", "Bash(cat:*)", "Bash(cd:*)", "Bash(sed:*)", "Bash(python3:*)"],
     "deny": [
       "Edit(./.env)",
       "Edit(./secrets/**)",

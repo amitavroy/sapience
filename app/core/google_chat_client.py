@@ -128,16 +128,37 @@ class GoogleChatClient:
             time.monotonic() + body.get("expires_in", TOKEN_LIFETIME) - REFRESH_MARGIN
         )
 
+    async def _chat_call(self, method: str, url: str, body: dict) -> httpx.Response:
+        """A Chat API call with one token refresh on 401; raises GoogleChatError on failure."""
+        r = await self._send(method, url, body, await self._access_token())
+        if r.status_code == 401:
+            r = await self._send(method, url, body, await self._access_token(force=True))
+        _raise_for_status(r)
+        return r
+
+    async def _send(self, method: str, url: str, body: dict, token: str) -> httpx.Response:
+        try:
+            return await self._http.request(
+                method, url, json=body, headers={"Authorization": f"Bearer {token}"}
+            )
+        except httpx.HTTPError as e:
+            raise GoogleChatError(f"request failed: {type(e).__name__}") from e
+
     async def create_message(self, space: str, text: str) -> str:
         """Posts a message to the space as the app; returns its name (spaces/…/messages/…)."""
-        url = f"{CHAT_API}/{space}/messages"
-        r = await self._post(url, json={"text": text}, token=await self._access_token())
-        if r.status_code == 401:
-            r = await self._post(
-                url, json={"text": text}, token=await self._access_token(force=True)
-            )
-        _raise_for_status(r)
+        r = await self._chat_call("POST", f"{CHAT_API}/{space}/messages", {"text": text})
         return r.json()["name"]
+
+    async def create_card_message(self, space: str, text: str, cards_v2: list[dict]) -> str:
+        """Posts a message with cards (buttons); returns its name."""
+        body = {"text": text, "cardsV2": cards_v2}
+        r = await self._chat_call("POST", f"{CHAT_API}/{space}/messages", body)
+        return r.json()["name"]
+
+    async def update_message(self, name: str, text: str, cards_v2: list[dict] | None) -> None:
+        """Replaces a message's text and cards; no cards removes the old ones."""
+        body = {"text": text, "cardsV2": cards_v2 or []}
+        await self._chat_call("PATCH", f"{CHAT_API}/{name}?updateMask=text,cardsV2", body)
 
 
 def get_google_chat_client(request: Request) -> GoogleChatClient:
